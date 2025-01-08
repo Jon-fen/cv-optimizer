@@ -3,9 +3,6 @@ import { Upload } from 'lucide-react';
 
 const ATSOptimizer = () => {
   const [cvContent, setCvContent] = useState('');
-  const [jobDescription, setJobDescription] = useState('');
-  const [selectedATS, setSelectedATS] = useState('workday');
-  const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
