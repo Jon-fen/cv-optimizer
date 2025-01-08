@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Upload, FileText, BookOpen, AlertTriangle, Save, Download, History, Building } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 const ATSOptimizer = () => {
   const [cvContent, setCvContent] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [selectedATS, setSelectedATS] = useState('workday');
-  const [analysis, setAnalysis] = useState(null);
+  const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,6 +67,7 @@ const ATSOptimizer = () => {
             htmlFor="cv-upload"
             className="cursor-pointer text-blue-600 hover:text-blue-800"
           >
+            <Upload className="inline-block mr-2" />
             Subir CV
           </label>
           {loading && <p className="mt-2">Cargando...</p>}
