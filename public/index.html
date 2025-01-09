@@ -6,7 +6,8 @@
     <title>Optimizador de CV para ATS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         .bg-pattern {
             background-color: #f8fafc;
@@ -76,157 +77,167 @@
     </style>
 </head>
 <body class="bg-pattern min-h-screen">
-    <div class="max-w-4xl mx-auto p-6">
-        <div class="text-center my-8">
-            <h1 class="text-4xl font-bold text-gray-900 mb-2">Optimizador de CV para ATS</h1>
-            <p class="text-lg text-gray-600">
-                Sube tu CV en PDF y obtén un análisis detallado de compatibilidad con sistemas ATS
-            </p>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-lg p-8">
-            <!-- Selector de idioma -->
-            <div class="mb-6">
-                <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
-                    Idioma del análisis:
-                </label>
-                <select id="language" 
-                        class="w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                </select>
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center text-gray-900 mb-8">
+            Analyze This! - Optimizador de CV para ATS
+        </h1>
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="text-center my-8">
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">Optimizador de CV para ATS</h1>
+                <p class="text-lg text-gray-600">
+                    Sube tu CV en PDF y obtén un análisis detallado de compatibilidad con sistemas ATS
+                </p>
             </div>
 
-            <div class="mt-6">
-                <label for="cvFile" class="block text-sm font-medium text-gray-700">
-                    Sube tu CV
-                </label>
-                <label for="cvFile" class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 cursor-pointer transition-colors duration-150">
-                    <div class="space-y-1 text-center">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <!-- Selector de idioma -->
+                <div class="mb-6">
+                    <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                        Idioma del análisis:
+                    </label>
+                    <select id="language" 
+                            class="w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg">
+                        <option value="es">Español</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+
+                <div class="mt-6">
+                    <label for="cvFile" class="block text-sm font-medium text-gray-700">
+                        Sube tu CV
+                    </label>
+                    <label for="cvFile" class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 cursor-pointer transition-colors duration-150">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="flex text-sm text-gray-600 justify-center">
+                                <span class="relative bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                    Sube un archivo
+                                </span>
+                                <p class="pl-1">o arrastra y suelta</p>
+                                <input id="cvFile" name="cvFile" type="file" class="sr-only" accept=".pdf">
+                            </div>
+                            <p class="text-xs text-gray-500">PDF hasta 5MB</p>
+                        </div>
+                    </label>
+                    <div id="selectedFile" class="mt-2 text-sm text-gray-600 hidden">
+                        Archivo seleccionado: <span id="fileName"></span>
+                    </div>
+                </div>
+
+                <!-- Botón de Análisis -->
+                <div class="mt-4">
+                    <button id="analyzeButton" 
+                            onclick="analyzeCV()" 
+                            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                        Analizar mi CV
+                    </button>
+                </div>
+
+                <!-- Sistemas ATS -->
+                <div>
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Sistemas ATS a analizar:</h3>
+                    <p class="text-sm text-gray-500 mb-3">Selecciona los sistemas ATS específicos para los que quieres optimizar tu CV</p>
+                    <div id="atsSystems" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <!-- Los sistemas ATS se agregarán aquí dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Descripción del trabajo (Premium) -->
+                <div class="relative">
+                    <div class="absolute -top-2 right-0">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+                            Premium
+                        </span>
+                    </div>
+                    <label for="jobDescription" class="block text-sm font-medium text-gray-700 mb-2">
+                        Descripción del trabajo
+                    </label>
+                    <p class="text-sm text-gray-500 mb-3">Pega la descripción del trabajo para recibir sugerencias más específicas</p>
+                    <textarea id="jobDescription"
+                              rows="4"
+                              class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                              placeholder="Esta función estará disponible próximamente..."
+                              disabled></textarea>
+                    <button onclick="unlockPremium()" 
+                            class="mt-2 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <svg class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
-                        <div class="flex text-sm text-gray-600 justify-center">
-                            <span class="relative bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                                Sube un archivo
-                            </span>
-                            <p class="pl-1">o arrastra y suelta</p>
-                            <input id="cvFile" name="cvFile" type="file" class="sr-only" accept=".pdf">
-                        </div>
-                        <p class="text-xs text-gray-500">PDF hasta 5MB</p>
-                    </div>
-                </label>
-                <div id="selectedFile" class="mt-2 text-sm text-gray-600 hidden">
-                    Archivo seleccionado: <span id="fileName"></span>
+                        Desbloquear función Premium
+                    </button>
                 </div>
             </div>
 
-            <!-- Botón de Análisis -->
-            <div class="mt-4">
-                <button id="analyzeButton" 
-                        onclick="analyzeCV()" 
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled>
-                    Analizar mi CV
-                </button>
-            </div>
-
-            <!-- Sistemas ATS -->
-            <div>
-                <h3 class="text-sm font-medium text-gray-700 mb-2">Sistemas ATS a analizar:</h3>
-                <p class="text-sm text-gray-500 mb-3">Selecciona los sistemas ATS específicos para los que quieres optimizar tu CV</p>
-                <div id="atsSystems" class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <!-- Los sistemas ATS se agregarán aquí dinámicamente -->
+            <!-- Loading Overlay -->
+            <div id="loading" class="loading-overlay hidden">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p class="text-lg font-medium text-gray-900">Analizando CV...</p>
+                    <p class="text-sm text-gray-500">Esto puede tomar unos segundos</p>
                 </div>
             </div>
 
-            <!-- Descripción del trabajo (Premium) -->
-            <div class="relative">
-                <div class="absolute -top-2 right-0">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
-                        Premium
-                    </span>
-                </div>
-                <label for="jobDescription" class="block text-sm font-medium text-gray-700 mb-2">
-                    Descripción del trabajo
-                </label>
-                <p class="text-sm text-gray-500 mb-3">Pega la descripción del trabajo para recibir sugerencias más específicas</p>
-                <textarea id="jobDescription"
-                          rows="4"
-                          class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                          placeholder="Esta función estará disponible próximamente..."
-                          disabled></textarea>
-                <button onclick="unlockPremium()" 
-                        class="mt-2 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    <svg class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    Desbloquear función Premium
-                </button>
-            </div>
-        </div>
+            <div id="error" class="hidden mt-6 bg-red-50 text-red-600 p-4 rounded-xl"></div>
 
-        <!-- Loading Overlay -->
-        <div id="loading" class="loading-overlay hidden">
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <p class="text-lg font-medium text-gray-900">Analizando CV...</p>
-                <p class="text-sm text-gray-500">Esto puede tomar unos segundos</p>
-            </div>
-        </div>
-
-        <div id="error" class="hidden mt-6 bg-red-50 text-red-600 p-4 rounded-xl"></div>
-
-        <div id="result" class="hidden mt-6">
-            <!-- Puntuación -->
-            <div class="score-card rounded-xl p-6 mb-6">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-semibold text-gray-900">Puntuación del CV</h2>
-                    <div class="flex gap-8">
-                        <div class="text-center">
-                            <span class="text-sm text-gray-500">Actual</span>
-                            <div class="flex items-baseline">
-                                <span id="initialScore" class="text-3xl font-bold text-blue-600">-</span>
-                                <span class="text-lg text-blue-600">/100</span>
+            <div id="result" class="hidden mt-6">
+                <!-- Puntuación -->
+                <div class="score-card rounded-xl p-6 mb-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-semibold text-gray-900">Puntuación del CV</h2>
+                        <div class="flex gap-8">
+                            <div class="text-center">
+                                <span class="text-sm text-gray-500">Actual</span>
+                                <div class="flex items-baseline">
+                                    <span id="initialScore" class="text-3xl font-bold text-blue-600">-</span>
+                                    <span class="text-lg text-blue-600">/100</span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="text-center">
-                            <span class="text-sm text-gray-500">Proyectada</span>
-                            <div class="flex items-baseline">
-                                <span id="projectedScore" class="text-3xl font-bold text-green-600">-</span>
-                                <span class="text-lg text-green-600">/100</span>
+                            <div class="text-center">
+                                <span class="text-sm text-gray-500">Proyectada</span>
+                                <div class="flex items-baseline">
+                                    <span id="projectedScore" class="text-3xl font-bold text-green-600">-</span>
+                                    <span class="text-lg text-green-600">/100</span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Botones de exportación -->
-            <div id="exportButtons" class="flex justify-end gap-4 mb-6 hidden">
-                <button onclick="exportToPDF()" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Exportar PDF
-                </button>
-                <button onclick="exportToWord()" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Exportar Word
-                </button>
-            </div>
+                <!-- Botones de exportación -->
+                <div id="exportButtons" class="flex justify-end gap-4 mb-6 hidden">
+                    <button onclick="exportToPDF()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Exportar PDF
+                    </button>
+                    <button onclick="exportToWord()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Exportar Word
+                    </button>
+                </div>
 
-            <!-- Análisis Detallado -->
-            <div class="bg-white rounded-xl shadow p-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Análisis Detallado</h2>
-                <div id="analysis" class="prose max-w-none">
-                    <!-- El análisis se insertará aquí -->
+                <!-- Análisis Detallado -->
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Análisis Detallado</h2>
+                    <div id="analysis" class="prose max-w-none">
+                        <!-- El análisis se insertará aquí -->
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 pb-6 text-center text-sm text-gray-500">
+            <p>Desarrollado por <a href="https://github.com/Jon-fen/" class="text-blue-600 hover:text-blue-800 transition-colors" target="_blank" rel="noopener noreferrer">Jonathan Friz B.</a></p>
+        </footer>
     </div>
 
     <script>
@@ -295,11 +306,34 @@
 
         // Función para desbloquear características premium
         function unlockPremium() {
-            premiumEnabled = true;
-            const jobDescription = document.getElementById('jobDescription');
-            jobDescription.disabled = false;
-            jobDescription.placeholder = "Pega aquí la descripción del trabajo al que estás aplicando...";
-            alert('¡Características Premium desbloqueadas! Ahora puedes usar la descripción del trabajo.');
+            const code = prompt('Ingresa el código de activación:');
+            if (!code) return;
+
+            // Verificar el código para hoy y ayer (por si es cerca de medianoche)
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const validCodes = [
+                generateDailyCode(today),
+                generateDailyCode(yesterday)
+            ];
+
+            if (validCodes.includes(code.toUpperCase())) {
+                premiumEnabled = true;
+                document.getElementById('jobDescription').disabled = false;
+                alert('¡Características Premium desbloqueadas! Ahora puedes usar la descripción del trabajo.');
+            } else {
+                alert('Código de activación inválido.');
+            }
+        }
+
+        // Sistema de código de activación
+        function generateDailyCode(date) {
+            const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+            const secretKey = 'JonathanFrizB2024';
+            const hash = CryptoJS.HmacSHA256(dateStr, secretKey);
+            return hash.toString(CryptoJS.enc.Hex).slice(0, 6).toUpperCase();
         }
 
         // Manejador de archivo y zona de arrastre
