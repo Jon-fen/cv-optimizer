@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
-// Inicializar el cliente de Anthropic
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file');
+    const file = formData.get('file') as File;
     
     if (!file) {
       return NextResponse.json(
@@ -18,8 +17,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convertir el archivo a texto
-    const fileText = await file.text();
+    // Convertir el archivo a ArrayBuffer y luego a texto
+    const arrayBuffer = await file.arrayBuffer();
+    const fileText = new TextDecoder().decode(arrayBuffer);
 
     // Analizar con Claude
     const analysis = await anthropic.messages.create({
