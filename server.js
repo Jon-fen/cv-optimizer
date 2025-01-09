@@ -373,9 +373,9 @@ ${atsSystems.map(ats => `
 });
 
 // Ruta para exportar a PDF
-app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) => {
+app.post('/export-pdf', async (req, res) => {
     try {
-        const { analysis, scores, fileName } = req.body;
+        const { analysis, scores } = req.body;
         
         // Crear el contenido HTML para el PDF
         const htmlContent = `
@@ -391,6 +391,9 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
               .score-value { font-size: 24px; font-weight: bold; }
               .score-label { font-size: 14px; color: #666; }
               .analysis { margin-top: 30px; }
+              .positive { color: #28a745; }
+              .warning { color: #ffc107; }
+              .critical { color: #dc3545; }
               h1 { color: #2563eb; }
               h2 { color: #1e40af; margin-top: 20px; }
             </style>
@@ -419,34 +422,36 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
           </html>
         `;
 
-        // Generar PDF
-        pdf.create(htmlContent, {
-          format: 'Letter',
-          border: {
-            top: '20mm',
-            right: '20mm',
-            bottom: '20mm',
-            left: '20mm'
-          },
-          header: {
-            height: '15mm',
-            contents: '<div style="text-align: center; font-size: 10px;">Análisis generado por Analyze This!</div>'
-          },
-          footer: {
-            height: '15mm',
-            contents: {
-              default: '<div style="text-align: center; font-size: 10px;">Página {{page}} de {{pages}}</div>'
+        // Generar PDF con opciones mejoradas
+        const pdfOptions = {
+            format: 'Letter',
+            border: {
+                top: '20mm',
+                right: '20mm',
+                bottom: '20mm',
+                left: '20mm'
+            },
+            header: {
+                height: '15mm',
+                contents: '<div style="text-align: center; font-size: 10px;">Análisis generado por Analyze This!</div>'
+            },
+            footer: {
+                height: '15mm',
+                contents: {
+                    default: '<div style="text-align: center; font-size: 10px;">Página {{page}} de {{pages}}</div>'
+                }
             }
-          }
-        }).toBuffer((err, buffer) => {
-          if (err) {
-            console.error('Error al generar PDF:', err);
-            return res.status(500).json({ error: 'Error al generar el PDF' });
-          }
-          
-          res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', `attachment; filename="${fileName}.pdf"`);
-          res.send(buffer);
+        };
+
+        pdf.create(htmlContent, pdfOptions).toBuffer((err, buffer) => {
+            if (err) {
+                console.error('Error al generar PDF:', err);
+                return res.status(500).json({ error: 'Error al generar el PDF' });
+            }
+            
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename="analisis-cv.pdf"');
+            res.send(buffer);
         });
     } catch (error) {
         console.error('Error:', error);
@@ -455,66 +460,62 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
 });
 
 // Ruta para exportar a Word
-app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) => {
+app.post('/export-word', async (req, res) => {
     try {
-        const { analysis, scores, fileName } = req.body;
+        const { analysis, scores } = req.body;
         
-        // Crear documento Word
-        const doc = new docx.Document({
-          sections: [{
-            properties: {},
-            children: [
-              new docx.Paragraph({
-                text: "Análisis de CV",
-                heading: docx.HeadingLevel.TITLE,
-                spacing: { before: 300, after: 300 }
-              }),
-              
-              new docx.Paragraph({
-                text: "Generado por Analyze This!",
-                spacing: { before: 300, after: 300 }
-              }),
-              
-              new docx.Paragraph({
-                children: [
-                  new docx.TextRun({
-                    text: `Puntuación Actual: ${scores.initial}/100`,
-                    bold: true
-                  })
-                ],
-                spacing: { before: 300, after: 100 }
-              }),
-              
-              new docx.Paragraph({
-                children: [
-                  new docx.TextRun({
-                    text: `Puntuación Proyectada: ${scores.projected}/100`,
-                    bold: true
-                  })
-                ],
-                spacing: { before: 100, after: 300 }
-              }),
-              
-              new docx.Paragraph({
-                text: "Análisis Detallado",
-                heading: docx.HeadingLevel.HEADING_1,
-                spacing: { before: 300, after: 300 }
-              }),
-              
-              new docx.Paragraph({
-                text: analysis,
-                spacing: { before: 200, after: 200 }
-              })
-            ]
-          }]
+        // Crear el contenido HTML para Word
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .scores { margin: 20px 0; padding: 20px; background: #f8f9fa; }
+              .score { margin-bottom: 10px; }
+              .score-value { font-weight: bold; }
+              .analysis { margin-top: 30px; }
+              .positive { color: #28a745; }
+              .warning { color: #ffc107; }
+              .critical { color: #dc3545; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Análisis de CV</h1>
+              <p>Generado por Analyze This!</p>
+            </div>
+            
+            <div class="scores">
+              <div class="score">
+                <div class="score-label">Puntuación Actual:</div>
+                <div class="score-value">${scores.initial}/100</div>
+              </div>
+              <div class="score">
+                <div class="score-label">Puntuación Proyectada:</div>
+                <div class="score-value">${scores.projected}/100</div>
+              </div>
+            </div>
+
+            <div class="analysis">
+              ${analysis}
+            </div>
+          </body>
+          </html>
+        `;
+
+        const fileBuffer = await HTMLToDocx(htmlContent, null, {
+            table: { row: { cantSplit: true } },
+            footer: true,
+            pageNumber: true,
+            font: 'Arial'
         });
 
-        // Generar el archivo
-        const buffer = await docx.Packer.toBuffer(doc);
-        
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}.docx"`);
-        res.send(buffer);
+        res.setHeader('Content-Disposition', 'attachment; filename="analisis-cv.docx"');
+        res.send(fileBuffer);
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Error al generar el documento Word' });
