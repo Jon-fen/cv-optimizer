@@ -49,18 +49,18 @@ if (process.env.VERCEL !== '1') {
 
 const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } });
 
-// Lista de sistemas ATS comunes
-const DEFAULT_ATS_SYSTEMS = [
-  "Workday",
-  "Greenhouse",
-  "Lever",
-  "iCIMS",
-  "Jobvite",
-  "Taleo",
-  "LinkedIn",
-  "Trabajando.com",
-  "Laborum.com"
-].join(", ");
+// Sistemas ATS por defecto
+const defaultSystems = [
+    "Workday",
+    "Lever",
+    "JazzHR",
+    "Recruitee",
+    "Taleo",
+    "LinkedIn",
+    "Trabajando.com",
+    "Laborum.com",
+    "GetOnBoard"
+];
 
 // Prompts en diferentes idiomas
 const PROMPTS = {
@@ -202,26 +202,8 @@ Please provide your analysis in this format:
   }
 };
 
-// Ruta para servir el archivo CSS
-app.get('/styles.css', (req, res) => {
-    res.type('text/css').send(`
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            line-height: 1.8;
-            color: #333;
-            background-color: #fafafa;
-            background-image: 
-                radial-gradient(#e2e8f0 2px, transparent 2px),
-                radial-gradient(#e2e8f0 2px, transparent 2px);
-            background-size: 32px 32px;
-            background-position: 0 0, 16px 16px;
-        }
-    `);
-});
-
 // Función para generar el prompt
-function generatePrompt(text, selectedSystems) {
-    const defaultSystems = ['LinkedIn', 'Trabajando.com', 'Laborum.com'];
+function generatePrompt(text, selectedSystems = []) {
     const allSystems = [...new Set([...selectedSystems, ...defaultSystems])];
     
     return `Analiza este CV para compatibilidad con sistemas ATS (${allSystems.join(', ')}). 
@@ -238,7 +220,7 @@ Instrucciones:
 
 Formato de respuesta:
 <analysis_report>
-[Tu análisis detallado aquí, usando para aspectos positivos, para mejoras sugeridas, y para problemas críticos]
+[Tu análisis detallado aquí, usando ✅ para aspectos positivos, ⚠️ para mejoras sugeridas, y ❌ para problemas críticos]
 </analysis_report>
 
 <initial_score>
@@ -249,6 +231,311 @@ Formato de respuesta:
 [Puntuación proyectada]
 </projected_score>`;
 }
+
+// Ruta para servir el archivo CSS
+app.get('/styles.css', (req, res) => {
+    res.type('text/css').send(`
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background-color: #fafafa;
+            background-image: 
+                radial-gradient(#e2e8f0 2px, transparent 2px),
+                radial-gradient(#e2e8f0 2px, transparent 2px);
+            background-size: 32px 32px;
+            background-position: 0 0, 16px 16px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 40px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .scores {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            padding: 20px;
+            background: linear-gradient(to right, #f8f9fa, #ffffff);
+            border-radius: 12px;
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06);
+        }
+        .score {
+            text-align: center;
+            padding: 20px;
+            transition: transform 0.2s;
+        }
+        .score:hover {
+            transform: translateY(-2px);
+        }
+        .score-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4f46e5;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+        }
+        .score-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .analysis {
+            margin-top: 40px;
+            line-height: 1.8;
+        }
+        .analysis-line {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8fafc;
+            transition: all 0.2s;
+        }
+        .analysis-line:hover {
+            background: #f1f5f9;
+            transform: translateX(5px);
+        }
+        .positive {
+            color: #16a34a;
+            border-left: 4px solid #16a34a;
+        }
+        .warning {
+            color: #ca8a04;
+            border-left: 4px solid #ca8a04;
+        }
+        .critical {
+            color: #dc2626;
+            border-left: 4px solid #dc2626;
+        }
+    `);
+});
+
+// Función para formatear el análisis
+function formatAnalysis(text) {
+    return text
+        .split('\n')
+        .map(line => {
+            let className = '';
+            if (line.includes('✅')) className = 'positive';
+            if (line.includes('⚠️')) className = 'warning';
+            if (line.includes('❌')) className = 'critical';
+            return `<div class="analysis-line ${className}">${line}</div>`;
+        })
+        .join('\n');
+}
+
+// Ruta para exportar a PDF
+app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) => {
+    try {
+        const { analysis, scores } = req.body;
+        
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif;
+                        line-height: 1.8;
+                        color: #333;
+                        padding: 40px;
+                    }
+                    .container {
+                        max-width: 800px;
+                        margin: 0 auto;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 40px;
+                        padding-bottom: 20px;
+                        border-bottom: 2px solid #f0f0f0;
+                    }
+                    .scores {
+                        display: flex;
+                        justify-content: space-around;
+                        margin: 30px 0;
+                        padding: 20px;
+                        background: #f8f9fa;
+                        border-radius: 12px;
+                    }
+                    .score {
+                        text-align: center;
+                        padding: 20px;
+                    }
+                    .score-value {
+                        font-size: 32px;
+                        font-weight: bold;
+                        color: #4f46e5;
+                    }
+                    .score-label {
+                        font-size: 14px;
+                        color: #666;
+                    }
+                    .analysis {
+                        margin-top: 40px;
+                    }
+                    .analysis-line {
+                        margin: 15px 0;
+                        padding: 15px;
+                        border-radius: 8px;
+                        background: #f8fafc;
+                    }
+                    .positive { color: #16a34a; border-left: 4px solid #16a34a; }
+                    .warning { color: #ca8a04; border-left: 4px solid #ca8a04; }
+                    .critical { color: #dc2626; border-left: 4px solid #dc2626; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Análisis de CV</h1>
+                        <p>Generado por Analyze This!</p>
+                    </div>
+                    
+                    <div class="scores">
+                        <div class="score">
+                            <div class="score-label">Puntuación Actual:</div>
+                            <div class="score-value">${scores.initial}/100</div>
+                        </div>
+                        <div class="score">
+                            <div class="score-label">Puntuación Proyectada:</div>
+                            <div class="score-value">${scores.projected}/100</div>
+                        </div>
+                    </div>
+
+                    <div class="analysis">
+                        ${formatAnalysis(analysis)}
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        pdf.create(htmlContent, {
+            format: 'A4',
+            border: {
+                top: "20mm",
+                right: "20mm",
+                bottom: "20mm",
+                left: "20mm"
+            }
+        }).toBuffer((err, buffer) => {
+            if (err) {
+                console.error('Error al generar PDF:', err);
+                res.status(500).json({ error: 'Error al generar PDF' });
+                return;
+            }
+            
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename=analisis-cv.pdf');
+            res.send(buffer);
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Error al generar el PDF' });
+    }
+});
+
+// Ruta para exportar a Word
+app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) => {
+    try {
+        const { analysis, scores } = req.body;
+        
+        const doc = new docx.Document({
+            sections: [{
+                properties: {},
+                children: [
+                    new docx.Paragraph({
+                        text: "Análisis de CV",
+                        heading: docx.HeadingLevel.TITLE,
+                        spacing: { before: 300, after: 300 },
+                        alignment: docx.AlignmentType.CENTER
+                    }),
+                    
+                    new docx.Paragraph({
+                        text: "Generado por Analyze This!",
+                        alignment: docx.AlignmentType.CENTER,
+                        spacing: { before: 100, after: 400 }
+                    }),
+                    
+                    new docx.Table({
+                        width: {
+                            size: 100,
+                            type: docx.WidthType.PERCENTAGE,
+                        },
+                        rows: [
+                            new docx.TableRow({
+                                children: [
+                                    new docx.TableCell({
+                                        children: [new docx.Paragraph("Puntuación Actual")],
+                                        width: { size: 50, type: docx.WidthType.PERCENTAGE }
+                                    }),
+                                    new docx.TableCell({
+                                        children: [new docx.Paragraph("Puntuación Proyectada")],
+                                        width: { size: 50, type: docx.WidthType.PERCENTAGE }
+                                    })
+                                ]
+                            }),
+                            new docx.TableRow({
+                                children: [
+                                    new docx.TableCell({
+                                        children: [new docx.Paragraph(`${scores.initial}/100`)],
+                                        width: { size: 50, type: docx.WidthType.PERCENTAGE }
+                                    }),
+                                    new docx.TableCell({
+                                        children: [new docx.Paragraph(`${scores.projected}/100`)],
+                                        width: { size: 50, type: docx.WidthType.PERCENTAGE }
+                                    })
+                                ]
+                            })
+                        ]
+                    }),
+                    
+                    new docx.Paragraph({
+                        text: "Análisis Detallado",
+                        heading: docx.HeadingLevel.HEADING_1,
+                        spacing: { before: 400, after: 200 }
+                    }),
+                    
+                    ...analysis.split('\n').filter(line => line.trim()).map(line => {
+                        let color = docx.Colors.BLACK;
+                        if (line.includes('✅')) color = '228B22'; // Verde oscuro
+                        if (line.includes('⚠️')) color = 'FFA500'; // Naranja
+                        if (line.includes('❌')) color = 'DC143C'; // Rojo
+
+                        return new docx.Paragraph({
+                            children: [
+                                new docx.TextRun({
+                                    text: line.trim(),
+                                    color: color
+                                })
+                            ],
+                            spacing: { before: 120, after: 120 }
+                        });
+                    })
+                ]
+            }]
+        });
+
+        const buffer = await docx.Packer.toBuffer(doc);
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', 'attachment; filename="analisis-cv.docx"');
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Error al generar el documento Word' });
+    }
+});
 
 // Ruta para analizar CV
 app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'), async (req, res) => {
@@ -367,156 +654,6 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
                 stack: error.stack
             } : undefined
         });
-    }
-});
-
-// Ruta para exportar a PDF
-app.post('/export-pdf', async (req, res) => {
-    try {
-        const { analysis, scores } = req.body;
-        
-        // Crear el contenido HTML para el PDF
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .scores { display: flex; justify-content: space-around; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }
-              .score { text-align: center; }
-              .score-value { font-size: 24px; font-weight: bold; }
-              .score-label { font-size: 14px; color: #666; }
-              .analysis { margin-top: 30px; }
-              .positive { color: #28a745; }
-              .warning { color: #ffc107; }
-              .critical { color: #dc3545; }
-              h1 { color: #2563eb; }
-              h2 { color: #1e40af; margin-top: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>Análisis de CV</h1>
-              <p>Generado por Analyze This!</p>
-            </div>
-            
-            <div class="scores">
-              <div class="score">
-                <div class="score-label">Puntuación Actual</div>
-                <div class="score-value">${scores.initial}/100</div>
-              </div>
-              <div class="score">
-                <div class="score-label">Puntuación Proyectada</div>
-                <div class="score-value">${scores.projected}/100</div>
-              </div>
-            </div>
-
-            <div class="analysis">
-              ${analysis}
-            </div>
-          </body>
-          </html>
-        `;
-
-        // Generar PDF con opciones mejoradas
-        const pdfOptions = {
-            format: 'Letter',
-            border: {
-                top: '20mm',
-                right: '20mm',
-                bottom: '20mm',
-                left: '20mm'
-            },
-            header: {
-                height: '15mm',
-                contents: '<div style="text-align: center; font-size: 10px;">Análisis generado por Analyze This!</div>'
-            },
-            footer: {
-                height: '15mm',
-                contents: {
-                    default: '<div style="text-align: center; font-size: 10px;">Página {{page}} de {{pages}}</div>'
-                }
-            }
-        };
-
-        pdf.create(htmlContent, pdfOptions).toBuffer((err, buffer) => {
-            if (err) {
-                console.error('Error al generar PDF:', err);
-                return res.status(500).json({ error: 'Error al generar el PDF' });
-            }
-            
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'attachment; filename="analisis-cv.pdf"');
-            res.send(buffer);
-        });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Error al generar el PDF' });
-    }
-});
-
-// Ruta para exportar a Word
-app.post('/export-word', async (req, res) => {
-    try {
-        const { analysis, scores } = req.body;
-        
-        // Crear el contenido HTML para Word
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .scores { margin: 20px 0; padding: 20px; background: #f8f9fa; }
-              .score { margin-bottom: 10px; }
-              .score-value { font-weight: bold; }
-              .analysis { margin-top: 30px; }
-              .positive { color: #28a745; }
-              .warning { color: #ffc107; }
-              .critical { color: #dc3545; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>Análisis de CV</h1>
-              <p>Generado por Analyze This!</p>
-            </div>
-            
-            <div class="scores">
-              <div class="score">
-                <div class="score-label">Puntuación Actual:</div>
-                <div class="score-value">${scores.initial}/100</div>
-              </div>
-              <div class="score">
-                <div class="score-label">Puntuación Proyectada:</div>
-                <div class="score-value">${scores.projected}/100</div>
-              </div>
-            </div>
-
-            <div class="analysis">
-              ${analysis}
-            </div>
-          </body>
-          </html>
-        `;
-
-        const fileBuffer = await HTMLToDocx(htmlContent, null, {
-            table: { row: { cantSplit: true } },
-            footer: true,
-            pageNumber: true,
-            font: 'Arial'
-        });
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', 'attachment; filename="analisis-cv.docx"');
-        res.send(fileBuffer);
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Error al generar el documento Word' });
     }
 });
 
