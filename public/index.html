@@ -264,35 +264,48 @@
             return marked.parse(text);
         }
 
-        // Sistemas ATS predeterminados con descripciones
-        const defaultAtsSystems = [
-            { id: "workday", name: "Workday", description: "Popular en grandes empresas y corporaciones" },
-            { id: "greenhouse", name: "Greenhouse", description: "Común en startups y empresas tecnológicas" },
-            { id: "lever", name: "Lever", description: "Usado en empresas de tecnología y startups" },
-            { id: "icims", name: "iCIMS", description: "Utilizado en empresas medianas y grandes" },
-            { id: "jobvite", name: "Jobvite", description: "Popular en empresas de diversos tamaños" },
-            { id: "taleo", name: "Taleo", description: "Muy común en corporaciones Fortune 500" }
+        // Lista de sistemas ATS disponibles
+        const atsSystems = [
+            'Workday',
+            'Greenhouse',
+            'iCIMS',
+            'Lever',
+            'Jobvite',
+            'Taleo',
+            'SAP SuccessFactors',
+            'JazzHR',
+            'BambooHR',
+            'Recruitee'
         ];
 
-        // Función para crear los checkboxes de sistemas ATS
+        // Función para crear los checkboxes de ATS
         function createAtsCheckboxes() {
             const container = document.getElementById('atsSystems');
-            defaultAtsSystems.forEach(system => {
+            container.innerHTML = ''; // Limpiar contenedor
+
+            atsSystems.forEach((system, index) => {
                 const div = document.createElement('div');
-                div.className = 'relative flex items-start';
-                div.innerHTML = `
-                    <div class="flex items-center h-5">
-                        <input type="checkbox" 
-                               id="ats_${system.id}" 
-                               value="${system.name}"
-                               onchange="updateAnalyzeButton()"
-                               class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                    </div>
-                    <div class="ml-3 text-sm">
-                        <label for="ats_${system.id}" class="font-medium text-gray-700">${system.name}</label>
-                        <p class="text-gray-500">${system.description}</p>
-                    </div>
-                `;
+                div.className = 'flex items-center mb-2';
+
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.id = `ats-${index}`;
+                input.name = 'ats';
+                input.value = system;
+                input.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500';
+                
+                // Seleccionar el primer sistema por defecto
+                if (index === 0) {
+                    input.checked = true;
+                }
+
+                const label = document.createElement('label');
+                label.htmlFor = `ats-${index}`;
+                label.className = 'ml-2 text-sm font-medium text-gray-900';
+                label.textContent = system;
+
+                div.appendChild(input);
+                div.appendChild(label);
                 container.appendChild(div);
             });
         }
@@ -421,8 +434,14 @@
                 formData.append('file', file);
                 
                 // Obtener sistemas ATS seleccionados
-                const selectedSystems = Array.from(document.querySelectorAll('input[name="ats"]:checked'))
-                    .map(checkbox => checkbox.value);
+                const selectedSystems = [];
+                document.querySelectorAll('input[name="ats"]').forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedSystems.push(checkbox.value);
+                    }
+                });
+                
+                console.log('Sistemas ATS seleccionados:', selectedSystems);
                 
                 if (selectedSystems.length === 0) {
                     showError('Por favor, selecciona al menos un sistema ATS');
