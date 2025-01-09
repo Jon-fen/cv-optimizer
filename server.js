@@ -23,6 +23,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Middleware para logging de solicitudes
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
 // Servir archivos estáticos solo si no estamos en Vercel
 if (process.env.VERCEL !== '1') {
   app.use(express.static('public'));
@@ -196,18 +202,27 @@ try {
 }
 
 // Ruta para analizar CV
-app.post(['/analyze', '/api/analyze'], upload.single('file'), async (req, res) => {
+app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'), async (req, res) => {
     console.log('📝 Nueva solicitud de análisis recibida');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('File:', req.file);
     
     try {
-        // Verificar configuración de Anthropic
-        if (!anthropic) {
-            throw new Error('Servicio no disponible - Error de configuración');
+        // Verificar API key
+        if (!process.env.ANTHROPIC_API_KEY) {
+            console.error('❌ API key no configurada');
+            return res.status(500).json({
+                error: 'Servicio no disponible - Error de configuración'
+            });
         }
 
-        // Validar archivo
+        // Verificar archivo
         if (!req.file) {
-            return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+            console.error('❌ No se recibió archivo');
+            return res.status(400).json({
+                error: 'No se ha subido ningún archivo'
+            });
         }
 
         const file = req.file;
@@ -480,7 +495,14 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
 
 // Manejador de errores global
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  console.error('❌ Error:', err);
+  
+  // Si ya se envió una respuesta, no hacer nada
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // Enviar respuesta de error
   res.status(500).json({ 
     error: 'Error interno del servidor',
     details: process.env.NODE_ENV === 'development' ? err.message : undefined
