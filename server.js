@@ -52,9 +52,10 @@ const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } });
 // Sistemas ATS por defecto
 const defaultSystems = [
     "Workday",
+    "Greenhouse",
     "Lever",
-    "JazzHR",
-    "Recruitee",
+    "iCIMS",
+    "Jobvite",
     "Taleo",
     "LinkedIn",
     "Trabajando.com",
@@ -203,14 +204,28 @@ Please provide your analysis in this format:
 };
 
 // Función para generar el prompt
-function generatePrompt(text, selectedSystems = []) {
+function generatePrompt(text, selectedSystems = [], jobDescription = null) {
     const allSystems = [...new Set([...selectedSystems, ...defaultSystems])];
     
-    return `Analiza este CV para compatibilidad con sistemas ATS (${allSystems.join(', ')}). 
+    let prompt = `Analiza este CV para compatibilidad con sistemas ATS (${allSystems.join(', ')}). 
 
 CV:
 ${text}
+`;
 
+    if (jobDescription) {
+        prompt += `
+Descripción del trabajo:
+${jobDescription}
+
+Por favor, considera la descripción del trabajo al analizar el CV y destaca:
+1. Coincidencias entre las palabras clave del trabajo y el CV
+2. Habilidades requeridas que están presentes en el CV
+3. Habilidades o requisitos faltantes
+`;
+    }
+
+    prompt += `
 Instrucciones:
 1. Analiza la compatibilidad con los sistemas ATS mencionados
 2. Evalúa estructura, palabras clave, formato y contenido
@@ -230,6 +245,8 @@ Formato de respuesta:
 <projected_score>
 [Puntuación proyectada]
 </projected_score>`;
+
+    return prompt;
 }
 
 // Ruta para servir el archivo CSS
@@ -239,7 +256,7 @@ app.get('/styles.css', (req, res) => {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.8;
             color: #333;
-            background-color: #fafafa;
+            background-color: #f0f2f5;
             background-image: 
                 radial-gradient(#e2e8f0 2px, transparent 2px),
                 radial-gradient(#e2e8f0 2px, transparent 2px);
@@ -250,22 +267,24 @@ app.get('/styles.css', (req, res) => {
             max-width: 800px;
             margin: 40px auto;
             padding: 40px;
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 16px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            backdrop-filter: blur(8px);
         }
         .header {
             text-align: center;
             margin-bottom: 40px;
             padding-bottom: 20px;
             border-bottom: 2px solid #f0f0f0;
+            color: #2563eb;
         }
         .scores {
             display: flex;
             justify-content: space-around;
             margin: 30px 0;
             padding: 20px;
-            background: linear-gradient(to right, #f8f9fa, #ffffff);
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
             border-radius: 12px;
             box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06);
         }
@@ -280,8 +299,10 @@ app.get('/styles.css', (req, res) => {
         .score-value {
             font-size: 32px;
             font-weight: bold;
-            color: #4f46e5;
-            text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         }
         .score-label {
             font-size: 14px;
@@ -298,6 +319,7 @@ app.get('/styles.css', (req, res) => {
             border-radius: 8px;
             background: #f8fafc;
             transition: all 0.2s;
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1);
         }
         .analysis-line:hover {
             background: #f1f5f9;
@@ -306,14 +328,44 @@ app.get('/styles.css', (req, res) => {
         .positive {
             color: #16a34a;
             border-left: 4px solid #16a34a;
+            background: linear-gradient(to right, #dcfce7 0%, #f8fafc 100%);
         }
         .warning {
             color: #ca8a04;
             border-left: 4px solid #ca8a04;
+            background: linear-gradient(to right, #fef9c3 0%, #f8fafc 100%);
         }
         .critical {
             color: #dc2626;
             border-left: 4px solid #dc2626;
+            background: linear-gradient(to right, #fee2e2 0%, #f8fafc 100%);
+        }
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+        .keyword {
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            background: #e0e7ff;
+            color: #4f46e5;
+            transition: all 0.2s;
+        }
+        .keyword:hover {
+            background: #4f46e5;
+            color: white;
+            transform: scale(1.05);
+        }
+        .keyword-match {
+            background: #bbf7d0;
+            color: #16a34a;
+        }
+        .keyword-missing {
+            background: #fee2e2;
+            color: #dc2626;
         }
     `);
 });
@@ -358,6 +410,7 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         margin-bottom: 40px;
                         padding-bottom: 20px;
                         border-bottom: 2px solid #f0f0f0;
+                        color: #2563eb;
                     }
                     .scores {
                         display: flex;
@@ -375,6 +428,7 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         font-size: 32px;
                         font-weight: bold;
                         color: #4f46e5;
+                        text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
                     }
                     .score-label {
                         font-size: 14px;
@@ -595,9 +649,12 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
             throw new Error('Sistemas ATS no válidos');
         }
 
+        // Obtener descripción del trabajo
+        const jobDescription = req.body.jobDescription;
+
         // Preparar análisis
         console.log(' Preparando prompt para análisis...');
-        const prompt = generatePrompt(data.text, atsSystems);
+        const prompt = generatePrompt(data.text, atsSystems, jobDescription);
         console.log(' Longitud del prompt:', prompt.length);
 
         console.log(' Enviando a Anthropic...');
@@ -654,6 +711,83 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
                 stack: error.stack
             } : undefined
         });
+    }
+});
+
+// Función para analizar descripción de trabajo
+async function analyzeJobDescription(description) {
+    const prompt = `Analiza la siguiente descripción de trabajo y extrae:
+1. Palabras clave importantes que los sistemas ATS buscarían
+2. Habilidades técnicas requeridas
+3. Habilidades blandas valoradas
+4. Requisitos de experiencia
+5. Certificaciones o educación requerida
+
+Descripción:
+${description}
+
+Por favor, estructura tu respuesta en el siguiente formato:
+
+<keywords>
+[Lista de palabras clave importantes, separadas por comas]
+</keywords>
+
+<technical_skills>
+[Lista de habilidades técnicas]
+</technical_skills>
+
+<soft_skills>
+[Lista de habilidades blandas]
+</soft_skills>
+
+<experience>
+[Requisitos de experiencia]
+</experience>
+
+<education>
+[Requisitos de educación y certificaciones]
+</education>`;
+
+    const response = await anthropic.messages.create({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 1000,
+        messages: [{
+            role: "user",
+            content: prompt
+        }]
+    });
+
+    return response.content[0].text;
+}
+
+// Función para comparar CV con descripción de trabajo
+function compareWithJob(cvAnalysis, jobAnalysis) {
+    // Extraer palabras clave del análisis del trabajo
+    const jobKeywords = extractSection(jobAnalysis, 'keywords').split(',').map(k => k.trim().toLowerCase());
+    
+    // Extraer texto del CV
+    const cvText = cvAnalysis.toLowerCase();
+    
+    // Encontrar coincidencias y palabras faltantes
+    const matches = jobKeywords.filter(keyword => cvText.includes(keyword));
+    const missing = jobKeywords.filter(keyword => !cvText.includes(keyword));
+    
+    return {
+        matches,
+        missing,
+        matchRate: (matches.length / jobKeywords.length) * 100
+    };
+}
+
+// Ruta para analizar descripción de trabajo
+app.post(['/analyze-job', '/api/analyze-job'], express.json(), async (req, res) => {
+    try {
+        const { description } = req.body;
+        const analysis = await analyzeJobDescription(description);
+        res.json({ analysis });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Error al analizar la descripción del trabajo' });
     }
 });
 
