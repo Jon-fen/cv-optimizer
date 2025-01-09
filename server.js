@@ -195,8 +195,12 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
     
     try {
         // Verificar API key
-        if (!process.env.ANTHROPIC_API_KEY) {
-            throw new Error('API key no configurada');
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey || typeof apiKey !== 'string' || !apiKey.startsWith('sk-ant')) {
+            console.error(' API key no válida');
+            return res.status(500).json({
+                error: 'Error de configuración - API key no válida'
+            });
         }
 
         console.log(' API key verificada');
@@ -204,8 +208,7 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
         // Crear cliente Anthropic
         console.log(' Creando cliente Anthropic...');
         const anthropic = new Anthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY,
-            baseURL: 'https://api.anthropic.com'
+            apiKey: apiKey.trim()
         });
         console.log(' Cliente Anthropic creado');
 
