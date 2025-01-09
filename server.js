@@ -22,7 +22,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static('public'));
+
+// Servir archivos estáticos solo si no estamos en Vercel
+if (process.env.VERCEL !== '1') {
+  app.use(express.static('public'));
+}
 
 const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
@@ -192,7 +196,7 @@ try {
 }
 
 // Ruta para analizar CV
-app.post('/analyze', upload.single('file'), async (req, res) => {
+app.post(['/analyze', '/api/analyze'], upload.single('file'), async (req, res) => {
     console.log('📝 Nueva solicitud de análisis recibida');
     
     try {
@@ -326,7 +330,7 @@ ${jobDescription}
 });
 
 // Ruta para exportar a PDF
-app.post('/export-pdf', express.json(), async (req, res) => {
+app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) => {
     try {
         const { analysis, scores, fileName } = req.body;
         
@@ -408,7 +412,7 @@ app.post('/export-pdf', express.json(), async (req, res) => {
 });
 
 // Ruta para exportar a Word
-app.post('/export-word', express.json(), async (req, res) => {
+app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) => {
     try {
         const { analysis, scores, fileName } = req.body;
         
@@ -474,6 +478,30 @@ app.post('/export-word', express.json(), async (req, res) => {
     }
 });
 
+// Manejador de errores global
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ 
+    error: 'Error interno del servidor',
+    details: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Ruta catch-all para manejar todas las demás rutas
+app.get('*', (req, res) => {
+  if (process.env.VERCEL === '1') {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+});
+
+const port = process.env.PORT || 3002;
+app.listen(port, () => {
+  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log('API Key configurada:', process.env.ANTHROPIC_API_KEY ? 'Sí' : 'No');
+});
+
 // Función auxiliar para convertir HTML a texto plano
 function stripHtml(html) {
   return html.replace(/<[^>]*>/g, '')
@@ -484,9 +512,3 @@ function stripHtml(html) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
 }
-
-const port = process.env.PORT || 3002;
-app.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
-  console.log('API Key configurada:', process.env.ANTHROPIC_API_KEY ? 'Sí' : 'No');
-});
