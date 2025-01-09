@@ -243,11 +243,11 @@ Formato de respuesta:
 </analysis_report>
 
 <initial_score>
-[Puntuación inicial]
+[Puntuación inicial del CV, número entre 0 y 100]
 </initial_score>
 
 <projected_score>
-[Puntuación proyectada]
+[Puntuación proyectada del CV después de las mejoras, número entre 0 y 100]
 </projected_score>`;
 
     return prompt;
@@ -262,10 +262,10 @@ app.get('/styles.css', (req, res) => {
             color: #333;
             background-color: #f0f2f5;
             background-image: 
-                radial-gradient(#e2e8f0 1.5px, transparent 1.5px),
-                radial-gradient(#e2e8f0 1.5px, transparent 1.5px);
-            background-size: 24px 24px;
-            background-position: 0 0, 12px 12px;
+                radial-gradient(#e2e8f0 1px, transparent 1px),
+                radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
             position: relative;
         }
         body::before {
@@ -384,6 +384,17 @@ function formatAnalysis(text) {
 app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) => {
     try {
         const { analysis, scores } = req.body;
+        const puppeteer = require('puppeteer-core');
+        const chrome = require('@sparticuz/chromium');
+        
+        const browser = await puppeteer.launch({
+            args: chrome.args,
+            defaultViewport: chrome.defaultViewport,
+            executablePath: await chrome.executablePath(),
+            headless: true,
+        });
+        
+        const page = await browser.newPage();
         
         const htmlContent = `
             <!DOCTYPE html>
@@ -488,28 +499,22 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
             </html>
         `;
 
-        const options = {
+        await page.setContent(htmlContent);
+        const pdf = await page.pdf({
             format: 'A4',
-            border: {
-                top: "20mm",
-                right: "20mm",
-                bottom: "20mm",
-                left: "20mm"
-            },
-            timeout: 120000
-        };
-
-        pdf.create(htmlContent, options).toBuffer((err, buffer) => {
-            if (err) {
-                console.error('Error al generar PDF:', err);
-                res.status(500).json({ error: 'Error al generar PDF' });
-                return;
+            margin: {
+                top: '20mm',
+                right: '20mm',
+                bottom: '20mm',
+                left: '20mm'
             }
-            
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'attachment; filename=analisis-cv.pdf');
-            res.send(buffer);
         });
+
+        await browser.close();
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=analisis-cv.pdf');
+        res.send(pdf);
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Error al generar el PDF' });
@@ -578,10 +583,10 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
                     }),
                     
                     ...analysis.split('\n').filter(line => line.trim()).map(line => {
-                        let color = docx.Colors.BLACK;
-                        if (line.includes('✅')) color = '228B22'; // Verde oscuro
-                        if (line.includes('⚠️')) color = 'FFA500'; // Naranja
-                        if (line.includes('❌')) color = 'DC143C'; // Rojo
+                        let textColor = "000000"; // Negro por defecto
+                        if (line.includes('✅')) textColor = '228B22'; // Verde oscuro
+                        if (line.includes('⚠️')) textColor = 'FFA500'; // Naranja
+                        if (line.includes('❌')) textColor = 'DC143C'; // Rojo
 
                         // Hacer el título en negrita
                         const parts = line.split(':');
@@ -591,11 +596,11 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
                                     new docx.TextRun({
                                         text: parts[0] + ':',
                                         bold: true,
-                                        color: color
+                                        color: textColor
                                     }),
                                     new docx.TextRun({
                                         text: parts.slice(1).join(':'),
-                                        color: color
+                                        color: textColor
                                     })
                                 ],
                                 spacing: { before: 120, after: 120 }
@@ -606,7 +611,7 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
                             children: [
                                 new docx.TextRun({
                                     text: line.trim(),
-                                    color: color
+                                    color: textColor
                                 })
                             ],
                             spacing: { before: 120, after: 120 }
