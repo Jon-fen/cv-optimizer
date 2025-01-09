@@ -12,11 +12,10 @@ const cors = require('cors');
 require('dotenv').config({ path: '.env.local' });
 
 console.log(' Iniciando servidor...');
-console.log(' Versión de @anthropic-ai/sdk:', require('@anthropic-ai/sdk/package.json').version);
-console.log(' Variables de entorno:', {
+console.log(' Configuración:', {
     NODE_ENV: process.env.NODE_ENV,
     VERCEL: process.env.VERCEL,
-    ANTHROPIC_KEY_LENGTH: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'Configurada' : 'No configurada'
 });
 
 const app = express();
