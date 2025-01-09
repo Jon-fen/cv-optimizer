@@ -404,38 +404,35 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                 <style>
                     body { 
                         font-family: Arial, sans-serif;
-                        line-height: 1.8;
+                        line-height: 1.6;
                         color: #333;
+                        margin: 0;
                         padding: 40px;
-                        background-color: #f8fafc;
+                        background: white;
                     }
                     .container {
-                        background: white;
-                        padding: 40px;
-                        border-radius: 8px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        max-width: 800px;
+                        margin: 0 auto;
                     }
                     .header {
                         text-align: center;
-                        margin-bottom: 40px;
+                        margin-bottom: 30px;
                         padding-bottom: 20px;
-                        border-bottom: 2px solid #f0f0f0;
-                        color: #2563eb;
+                        border-bottom: 2px solid #eee;
                     }
                     .scores {
                         display: flex;
                         justify-content: space-around;
-                        margin: 30px 0;
+                        margin: 20px 0;
                         padding: 20px;
                         background: #f8f9fa;
-                        border-radius: 12px;
+                        border-radius: 8px;
                     }
                     .score {
                         text-align: center;
-                        padding: 20px;
                     }
                     .score-value {
-                        font-size: 32px;
+                        font-size: 28px;
                         font-weight: bold;
                         color: #4f46e5;
                     }
@@ -444,32 +441,26 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         color: #666;
                     }
                     .analysis {
-                        margin-top: 40px;
+                        margin-top: 30px;
                     }
                     .analysis-line {
                         margin: 15px 0;
                         padding: 15px;
                         border-radius: 8px;
                         background: #f8fafc;
+                        page-break-inside: avoid;
                     }
-                    .positive { 
-                        color: #16a34a; 
+                    .positive {
                         border-left: 4px solid #16a34a;
                         background: #dcfce7;
                     }
-                    .warning { 
-                        color: #ca8a04; 
+                    .warning {
                         border-left: 4px solid #ca8a04;
                         background: #fef9c3;
                     }
-                    .critical { 
-                        color: #dc2626; 
+                    .critical {
                         border-left: 4px solid #dc2626;
                         background: #fee2e2;
-                    }
-                    strong {
-                        font-weight: 600;
-                        color: #1e40af;
                     }
                 </style>
             </head>
@@ -500,6 +491,7 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
         `;
 
         await page.setContent(htmlContent);
+
         const pdf = await page.pdf({
             format: 'A4',
             margin: {
@@ -507,14 +499,15 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                 right: '20mm',
                 bottom: '20mm',
                 left: '20mm'
-            }
+            },
+            printBackground: true
         });
 
         await browser.close();
         
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename=analisis-cv.pdf');
-        res.send(pdf);
+        res.send(Buffer.from(pdf));
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Error al generar el PDF' });
