@@ -173,8 +173,7 @@ Please provide your analysis in this format:
 
 // Verificar API key al inicio
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('Error: ANTHROPIC_API_KEY no está configurada en el archivo .env.local');
-  process.exit(1);
+  console.error('⚠️ ANTHROPIC_API_KEY no está configurada en las variables de entorno');
 }
 
 const anthropic = new Anthropic({
@@ -184,139 +183,140 @@ const anthropic = new Anthropic({
 // Ruta para analizar CV
 app.post('/analyze', upload.single('file'), async (req, res) => {
   try {
-    console.log('Recibiendo archivo...');
-    
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('API key no configurada. Por favor, contacta al administrador.');
+    }
+
     if (!req.file) {
-      console.error('No se recibió ningún archivo');
-      return res.status(400).json({ error: 'No se proporcionó ningún archivo' });
+      return res.status(400).json({ error: 'No se ha subido ningún archivo' });
     }
 
-    // Obtener el idioma del request o usar español por defecto
+    const file = req.file;
     const language = req.body.language || 'es';
-    const prompt = PROMPTS[language] || PROMPTS.es;
+    const atsSystems = JSON.parse(req.body.atsSystems || '[]');
+    const jobDescription = req.body.jobDescription;
 
-    // Obtener sistemas ATS seleccionados
-    let atsSystems;
-    try {
-      atsSystems = JSON.parse(req.body.atsSystems || '[]');
-      if (!Array.isArray(atsSystems) || atsSystems.length === 0) {
-        return res.status(400).json({ error: 'Debes seleccionar al menos un sistema ATS' });
-      }
-    } catch (e) {
-      return res.status(400).json({ error: 'Formato inválido de sistemas ATS' });
+    if (!file.buffer) {
+      return res.status(400).json({ error: 'El archivo está vacío' });
     }
 
-    // Preparar secciones condicionales del prompt
-    let jobDescriptionSection = '';
-    let jobMatchSection = '';
-    let jobSkillsSection = '';
+    // Verificar el tipo de archivo
+    if (file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Por favor, sube un archivo PDF' });
+    }
 
-    if (req.body.jobDescription) {
-      jobDescriptionSection = `
+    // Verificar el tamaño del archivo (5MB máximo)
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'El archivo excede el tamaño máximo permitido (5MB)' });
+    }
+
+    try {
+      const data = await pdfParse(file.buffer);
+      const text = data.text;
+
+      if (!text || text.trim().length === 0) {
+        return res.status(400).json({ error: 'No se pudo extraer texto del PDF' });
+      }
+
+      let prompt = PROMPTS[language] || PROMPTS.es;
+
+      // Obtener sistemas ATS seleccionados
+      let atsSystemsList;
+      try {
+        atsSystemsList = JSON.parse(req.body.atsSystems || '[]');
+        if (!Array.isArray(atsSystemsList) || atsSystemsList.length === 0) {
+          return res.status(400).json({ error: 'Debes seleccionar al menos un sistema ATS' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Formato inválido de sistemas ATS' });
+      }
+
+      // Preparar secciones condicionales del prompt
+      let jobDescriptionSection = '';
+      let jobMatchSection = '';
+      let jobSkillsSection = '';
+
+      if (req.body.jobDescription) {
+        jobDescriptionSection = `
 <JOB_DESCRIPTION>
 ${req.body.jobDescription}
 </JOB_DESCRIPTION>`;
-      
-      jobMatchSection = `
+        
+        jobMatchSection = `
    - Coincidencia con la descripción del trabajo
    - Palabras clave faltantes del trabajo`;
-      
-      jobSkillsSection = `
+        
+        jobSkillsSection = `
    - Alineación con requisitos del trabajo
    - Habilidades requeridas vs. presentadas`;
-    }
-
-    console.log('Archivo recibido:', req.file.originalname, 'Tamaño:', req.file.size);
-
-    let pdfData;
-    try {
-      console.log('Procesando PDF...');
-      pdfData = await pdfParse(req.file.buffer);
-      console.log('PDF procesado. Longitud del texto:', pdfData.text.length);
-    } catch (pdfError) {
-      console.error('Error al procesar el PDF:', pdfError);
-      return res.status(400).json({ error: 'Error al procesar el archivo PDF. Asegúrate de que sea un PDF válido.' });
-    }
-    
-    if (!pdfData || !pdfData.text) {
-      console.error('No se pudo extraer texto del PDF');
-      return res.status(400).json({ error: 'No se pudo extraer texto del archivo PDF' });
-    }
-    
-    console.log('Enviando a API de Anthropic...');
-    const message = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307",
-      max_tokens: 4096,
-      system: prompt.system,
-      messages: [{
-        role: "user",
-        content: prompt.user
-          .replace('{cvText}', pdfData.text)
-          .replace('{atsSystems}', atsSystems.join(", "))
-          .replace('{jobDescriptionSection}', jobDescriptionSection)
-          .replace('{jobMatchSection}', jobMatchSection)
-          .replace('{jobSkillsSection}', jobSkillsSection)
-      }]
-    });
-
-    console.log('Respuesta recibida de Anthropic');
-    
-    if (!message.content || message.content.length === 0) {
-      console.error('La API no devolvió contenido');
-      throw new Error('No se recibió respuesta del análisis');
-    }
-
-    // Extraer las diferentes secciones del análisis
-    const content = message.content[0].text;
-    console.log('Contenido recibido:', content.substring(0, 200) + '...'); // Log para debug
-
-    // Expresiones regulares mejoradas con flags multiline
-    const analysisMatch = content.match(/<analysis_report>([\s\S]*?)<\/analysis_report>/m);
-    const initialMatch = content.match(/<initial_score>([\s\S]*?)<\/initial_score>/m);
-    const projectedMatch = content.match(/<projected_score>([\s\S]*?)<\/projected_score>/m);
-
-    if (!analysisMatch) {
-      console.error('No se encontró la sección de análisis en la respuesta');
-      throw new Error('Formato de respuesta inválido: falta el análisis');
-    }
-
-    const analysisReport = analysisMatch[1].trim();
-    const initialScore = initialMatch ? parseFloat(initialMatch[1]) : 0;
-    const projectedScore = projectedMatch ? parseFloat(projectedMatch[1]) : 0;
-
-    console.log('Análisis extraído:', analysisReport.substring(0, 100) + '...');
-    console.log('Puntuaciones:', { inicial: initialScore, proyectada: projectedScore });
-
-    if (!analysisReport) {
-      throw new Error('El análisis está vacío');
-    }
-
-    res.json({
-      analysis: {
-        report: analysisReport,
-        initialScore: initialScore,
-        projectedScore: projectedScore,
-        atsSystems: atsSystems
       }
-    });
-  } catch (error) {
-    console.error('Error detallado:', error);
-    
-    if (error.status === 401) {
-      return res.status(401).json({ 
-        error: 'Error de autenticación con la API. Verifica tu API key.'
-      });
-    }
-    
-    if (error.status === 429) {
-      return res.status(429).json({ 
-        error: 'Se ha excedido el límite de la API. Intenta nuevamente más tarde.'
-      });
-    }
 
+      prompt = prompt.user
+        .replace('{cvText}', text)
+        .replace('{atsSystems}', atsSystemsList.join(", "))
+        .replace('{jobDescriptionSection}', jobDescriptionSection)
+        .replace('{jobMatchSection}', jobMatchSection)
+        .replace('{jobSkillsSection}', jobSkillsSection);
+
+      const message = await anthropic.messages.create({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 4096,
+        system: prompt.system,
+        messages: [{
+          role: "user",
+          content: prompt
+        }]
+      });
+
+      if (!message || !message.content) {
+        throw new Error('No se recibió una respuesta válida del análisis');
+      }
+
+      // Extraer las diferentes secciones del análisis
+      const content = message.content[0].text;
+      console.log('Contenido recibido:', content.substring(0, 200) + '...'); // Log para debug
+
+      // Expresiones regulares mejoradas con flags multiline
+      const analysisMatch = content.match(/<analysis_report>([\s\S]*?)<\/analysis_report>/m);
+      const initialMatch = content.match(/<initial_score>([\s\S]*?)<\/initial_score>/m);
+      const projectedMatch = content.match(/<projected_score>([\s\S]*?)<\/projected_score>/m);
+
+      if (!analysisMatch) {
+        console.error('No se encontró la sección de análisis en la respuesta');
+        throw new Error('Formato de respuesta inválido: falta el análisis');
+      }
+
+      const analysisReport = analysisMatch[1].trim();
+      const initialScore = initialMatch ? parseFloat(initialMatch[1]) : 0;
+      const projectedScore = projectedMatch ? parseFloat(projectedMatch[1]) : 0;
+
+      console.log('Análisis extraído:', analysisReport.substring(0, 100) + '...');
+      console.log('Puntuaciones:', { inicial: initialScore, proyectada: projectedScore });
+
+      if (!analysisReport) {
+        throw new Error('El análisis está vacío');
+      }
+
+      res.json({
+        analysis: {
+          report: analysisReport,
+          initialScore: initialScore,
+          projectedScore: projectedScore,
+          atsSystems: atsSystemsList
+        }
+      });
+    } catch (error) {
+      console.error('Error al procesar el archivo:', error);
+      res.status(500).json({ 
+        error: 'Error al procesar el archivo',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  } catch (error) {
+    console.error('Error en el servidor:', error);
     res.status(500).json({ 
-      error: 'Error al procesar el archivo: ' + (error.message || 'Error desconocido'),
-      details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
+      error: 'Error en el servidor',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
