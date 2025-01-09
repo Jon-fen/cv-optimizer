@@ -1,57 +1,118 @@
 import React, { useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader, Upload } from 'lucide-react';
 
-const ATSOptimizer = () => {
-  const [cvContent, setCvContent] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function ATSOptimizer() {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const analyzePDF = async (file) => {
+    try {
+      setIsAnalyzing(true);
+      setError('');
+      
+      // Crear FormData y añadir el archivo
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/analyze-cv', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al analizar el CV');
+      }
+
+      const data = await response.json();
+      setResult(data.analysis);
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error al procesar el archivo. Por favor, intenta de nuevo.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setLoading(true);
-    try {
-      const text = await file.text();
-      setCvContent(text);
-    } catch (error) {
-      console.error('Error reading file:', error);
+    // Validar tipo de archivo
+    if (file.type !== 'application/pdf') {
+      setError('Por favor, sube un archivo PDF.');
+      return;
     }
-    setLoading(false);
+
+    // Validar tamaño (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('El archivo es demasiado grande. Máximo 10MB.');
+      return;
+    }
+
+    await analyzePDF(file);
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Optimizador de CV para ATS</h1>
-      
-      <div className="space-y-6">
-        <div className="border-2 border-dashed rounded-lg p-6">
-          <input
-            type="file"
-            onChange={handleFileUpload}
-            className="hidden"
-            id="cv-upload"
-            accept=".doc,.docx,.pdf,.txt"
-          />
-          <label
-            htmlFor="cv-upload"
-            className="cursor-pointer text-blue-600 hover:text-blue-800"
-          >
-            <Upload className="inline-block mr-2" />
-            Subir CV
-          </label>
-          {loading && <p className="mt-2">Cargando...</p>}
-          {cvContent && (
-            <div className="mt-4">
-              <p className="font-medium">Contenido detectado:</p>
-              <p className="text-sm text-gray-600 mt-2">
-                {cvContent.slice(0, 200)}...
-              </p>
-            </div>
-          )}
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle className="text-2xl font-bold text-center">
+          Optimizador de CV para ATS
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Área de carga */}
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+          <div className="flex flex-col items-center">
+            <input
+              type="file"
+              id="cv-upload"
+              accept=".pdf"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <label
+              htmlFor="cv-upload"
+              className="flex flex-col items-center cursor-pointer"
+            >
+              <Upload className="w-12 h-12 text-gray-400 mb-4" />
+              <span className="text-lg font-medium text-gray-600">
+                Sube tu CV en PDF
+              </span>
+              <span className="text-sm text-gray-500 mt-2">
+                Máximo 10MB
+              </span>
+            </label>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-};
 
-export default ATSOptimizer;
+        {/* Estado de carga */}
+        {isAnalyzing && (
+          <div className="flex items-center justify-center space-x-2">
+            <Loader className="w-5 h-5 animate-spin" />
+            <span>Analizando CV...</span>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Resultados */}
+        {result && (
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Análisis del CV</h3>
+            <div className="prose max-w-none">
+              {result}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

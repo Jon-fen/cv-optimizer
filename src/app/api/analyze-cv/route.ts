@@ -12,34 +12,42 @@ export async function POST(request: Request) {
     
     if (!file) {
       return NextResponse.json(
-        { error: 'No file uploaded' },
+        { error: 'No se ha subido ningún archivo' },
         { status: 400 }
       );
     }
 
-    // Convertir el archivo a ArrayBuffer y luego a texto
-    const arrayBuffer = await file.arrayBuffer();
-    const fileText = new TextDecoder().decode(arrayBuffer);
+    // Leer el archivo como ArrayBuffer
+    const buffer = await file.arrayBuffer();
+    const pdfContent = new TextDecoder().decode(buffer);
 
-    // Analizar con Claude
+    // Enviar a Claude para análisis
     const analysis = await anthropic.messages.create({
       model: "claude-3-haiku-20240307",
       max_tokens: 1024,
       messages: [{
         role: "user",
-        content: `Analiza este CV y proporciona recomendaciones para optimizarlo para sistemas ATS: ${fileText}`
+        content: `Eres un experto en optimización de CVs para sistemas ATS (Applicant Tracking Systems). 
+        Analiza el siguiente CV y proporciona:
+        1. Un resumen de las fortalezas y debilidades del CV
+        2. Recomendaciones específicas para mejorar la compatibilidad con sistemas ATS
+        3. Sugerencias de palabras clave faltantes que son comunes en la industria
+        4. Consejos para mejorar el formato y la estructura
+        
+        CV a analizar:
+        ${pdfContent}`
       }]
     });
 
     return NextResponse.json({
-      message: 'CV analyzed successfully',
-      analysis: analysis.content
+      message: 'CV analizado exitosamente',
+      analysis: analysis.content[0].text
     });
     
   } catch (error) {
     console.error('Error:', error);
     return NextResponse.json(
-      { error: 'Error processing the CV' },
+      { error: 'Error al procesar el CV' },
       { status: 500 }
     );
   }
