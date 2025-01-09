@@ -16,6 +16,21 @@ console.log('Variables de entorno disponibles:', Object.keys(process.env));
 console.log('¿ANTHROPIC_API_KEY está definida?:', !!process.env.ANTHROPIC_API_KEY);
 console.log('Longitud de ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0);
 
+// Inicializar Anthropic
+let anthropicClient;
+try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error('ANTHROPIC_API_KEY no está configurada');
+    }
+    anthropicClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+    console.log('✅ Cliente Anthropic inicializado correctamente');
+} catch (error) {
+    console.error('❌ Error al inicializar Anthropic:', error);
+    anthropicClient = null;
+}
+
 const app = express();
 
 // Configuración de middleware
@@ -186,21 +201,6 @@ Please provide your analysis in this format:
   }
 };
 
-// Verificar API key al inicio
-let anthropic;
-try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-        console.error('⚠️ ANTHROPIC_API_KEY no está configurada en las variables de entorno');
-        throw new Error('API key no configurada');
-    }
-    anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-    console.log('✅ Anthropic configurado correctamente');
-} catch (error) {
-    console.error('❌ Error al configurar Anthropic:', error);
-}
-
 // Ruta para analizar CV
 app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'), async (req, res) => {
     console.log('📝 Nueva solicitud de análisis recibida');
@@ -209,9 +209,9 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
     console.log('File:', req.file);
     
     try {
-        // Verificar API key
-        if (!process.env.ANTHROPIC_API_KEY) {
-            console.error('❌ API key no configurada');
+        // Verificar API key y cliente Anthropic
+        if (!process.env.ANTHROPIC_API_KEY || !anthropicClient) {
+            console.error('❌ API key no configurada o cliente Anthropic no inicializado');
             return res.status(500).json({
                 error: 'Servicio no disponible - Error de configuración'
             });
@@ -228,70 +228,65 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
         const file = req.file;
         console.log('📄 Archivo recibido:', file.originalname);
 
-        // Validar tipo y tamaño
-        if (file.mimetype !== 'application/pdf') {
-            return res.status(400).json({ error: 'Por favor, sube un archivo PDF' });
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            return res.status(400).json({ error: 'El archivo excede el tamaño máximo (5MB)' });
-        }
-
         // Procesar PDF
         console.log('🔍 Procesando PDF...');
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
         if (!text || text.trim().length === 0) {
-            return res.status(400).json({ error: 'No se pudo extraer texto del PDF' });
+            throw new Error('No se pudo extraer texto del PDF');
+        }
+
+        // Obtener sistemas ATS
+        const atsSystemsStr = req.body.atsSystems;
+        let atsSystems;
+        try {
+            atsSystems = JSON.parse(atsSystemsStr);
+            if (!Array.isArray(atsSystems) || atsSystems.length === 0) {
+                throw new Error('Formato inválido de sistemas ATS');
+            }
+        } catch (e) {
+            throw new Error('Error al procesar sistemas ATS: ' + e.message);
         }
 
         // Preparar prompt
         console.log('🤖 Preparando análisis...');
-        const language = req.body.language || 'es';
-        const prompt = PROMPTS[language] || PROMPTS.es;
-
-        // Validar sistemas ATS
-        let atsSystems;
-        try {
-            atsSystems = JSON.parse(req.body.atsSystems || '[]');
-            if (!Array.isArray(atsSystems) || atsSystems.length === 0) {
-                return res.status(400).json({ error: 'Selecciona al menos un sistema ATS' });
-            }
-        } catch (e) {
-            return res.status(400).json({ error: 'Formato inválido de sistemas ATS' });
-        }
-
-        // Preparar secciones condicionales
         const jobDescription = req.body.jobDescription || '';
-        const jobDescriptionSection = jobDescription ? `
-<JOB_DESCRIPTION>
-${jobDescription}
-</JOB_DESCRIPTION>` : '';
-
-        const jobMatchSection = jobDescription ? `
-   - Coincidencia con la descripción del trabajo
-   - Palabras clave faltantes del trabajo` : '';
-
-        const jobSkillsSection = jobDescription ? `
-   - Alineación con requisitos del trabajo
-   - Habilidades requeridas vs. presentadas` : '';
-
+        
         // Llamar a la API de Anthropic
         console.log('🚀 Enviando a Anthropic...');
-        const message = await anthropic.messages.create({
+        const message = await anthropicClient.messages.create({
             model: "claude-3-haiku-20240307",
             max_tokens: 4096,
             messages: [{
                 role: "user",
-                content: prompt.user
-                    .replace('{cvText}', text)
-                    .replace('{atsSystems}', atsSystems.join(", "))
-                    .replace('{jobDescriptionSection}', jobDescriptionSection)
-                    .replace('{jobMatchSection}', jobMatchSection)
-                    .replace('{jobSkillsSection}', jobSkillsSection)
+                content: `Por favor, analiza el siguiente CV para los sistemas ATS: ${atsSystems.join(", ")}.
+
+${jobDescription ? `
+<JOB_DESCRIPTION>
+${jobDescription}
+</JOB_DESCRIPTION>
+` : ''}
+
+<CV>
+${text}
+</CV>
+
+Por favor, estructura tu respuesta en el siguiente formato:
+
+<initial_score>
+[Puntuación inicial de 0-100]
+</initial_score>
+
+<analysis_report>
+[Tu análisis detallado aquí]
+</analysis_report>
+
+<projected_score>
+[Puntuación proyectada después de implementar las mejoras, de 0-100]
+</projected_score>`
             }],
-            system: prompt.system
+            system: "Eres un experto en análisis de CVs y sistemas ATS (Applicant Tracking Systems). Tu tarea es analizar CVs y proporcionar retroalimentación detallada para mejorar su compatibilidad con sistemas ATS."
         });
 
         if (!message || !message.content) {
@@ -318,26 +313,11 @@ ${jobDescription}
             atsSystems: atsSystems
         };
 
-        res.json({ analysis });
+        return res.json({ analysis });
 
     } catch (error) {
         console.error('❌ Error:', error);
-        
-        // Manejar errores específicos
-        if (error.status === 401) {
-            return res.status(401).json({ 
-                error: 'Error de autenticación con la API'
-            });
-        }
-        
-        if (error.status === 429) {
-            return res.status(429).json({ 
-                error: 'Límite de API excedido'
-            });
-        }
-
-        // Error general
-        res.status(500).json({ 
+        return res.status(500).json({ 
             error: 'Error al procesar el archivo',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
