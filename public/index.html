@@ -459,9 +459,8 @@
                 showLoading(true);
                 console.log('Enviando solicitud al servidor...');
 
-                // Usar la URL base correcta según el entorno
-                const baseUrl = window.location.origin;
-                const response = await fetch(`${baseUrl}/analyze`, {
+                // Usar la ruta correcta de la API
+                const response = await fetch('/api/analyze-cv', {
                     method: 'POST',
                     body: formData
                 });
@@ -470,11 +469,16 @@
                 
                 if (!response.ok) {
                     const errorData = await response.json();
+                    console.error('Error detallado:', errorData);
                     throw new Error(errorData.error || 'Error en el servidor');
                 }
 
                 const data = await response.json();
                 console.log('Datos recibidos:', data);
+
+                if (!data.analysis || !data.analysis.report) {
+                    throw new Error('Respuesta inválida del servidor');
+                }
 
                 const analysis = document.getElementById('analysis');
                 analysis.innerHTML = formatAnalysisText(data.analysis.report);
@@ -485,7 +489,7 @@
                 document.getElementById('result').classList.remove('hidden');
                 document.getElementById('exportButtons').classList.remove('hidden');
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error detallado:', error);
                 showError(error.message || 'Error al procesar el archivo');
                 showLoading(false);
             }
