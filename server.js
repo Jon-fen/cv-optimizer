@@ -16,21 +16,6 @@ console.log('Variables de entorno disponibles:', Object.keys(process.env));
 console.log('¿ANTHROPIC_API_KEY está definida?:', !!process.env.ANTHROPIC_API_KEY);
 console.log('Longitud de ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0);
 
-// Inicializar Anthropic
-let anthropicClient;
-try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-        throw new Error('ANTHROPIC_API_KEY no está configurada');
-    }
-    anthropicClient = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-    console.log('✅ Cliente Anthropic inicializado correctamente');
-} catch (error) {
-    console.error('❌ Error al inicializar Anthropic:', error);
-    anthropicClient = null;
-}
-
 const app = express();
 
 // Configuración de middleware
@@ -209,13 +194,18 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
     console.log('File:', req.file);
     
     try {
-        // Verificar API key y cliente Anthropic
-        if (!process.env.ANTHROPIC_API_KEY || !anthropicClient) {
-            console.error('❌ API key no configurada o cliente Anthropic no inicializado');
+        // Verificar API key
+        if (!process.env.ANTHROPIC_API_KEY) {
+            console.error('❌ API key no configurada');
             return res.status(500).json({
                 error: 'Servicio no disponible - Error de configuración'
             });
         }
+
+        // Crear cliente Anthropic
+        const anthropicClient = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY
+        });
 
         // Verificar archivo
         if (!req.file) {
@@ -255,7 +245,7 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
         
         // Llamar a la API de Anthropic
         console.log('🚀 Enviando a Anthropic...');
-        const message = await anthropicClient.messages.create({
+        const response = await anthropicClient.messages.create({
             model: "claude-3-haiku-20240307",
             max_tokens: 4096,
             messages: [{
@@ -289,13 +279,13 @@ Por favor, estructura tu respuesta en el siguiente formato:
             system: "Eres un experto en análisis de CVs y sistemas ATS (Applicant Tracking Systems). Tu tarea es analizar CVs y proporcionar retroalimentación detallada para mejorar su compatibilidad con sistemas ATS."
         });
 
-        if (!message || !message.content) {
+        if (!response || !response.content || !response.content[0]) {
             throw new Error('No se recibió respuesta del análisis');
         }
 
         // Procesar respuesta
         console.log('✅ Análisis completado');
-        const content = message.content[0].text;
+        const content = response.content[0].text;
         
         // Extraer secciones
         const analysisMatch = content.match(/<analysis_report>([\s\S]*?)<\/analysis_report>/m);
