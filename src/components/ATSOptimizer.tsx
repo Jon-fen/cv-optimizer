@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Loader, Upload } from 'lucide-react';
 
 export default function ATSOptimizer() {
@@ -13,7 +13,6 @@ export default function ATSOptimizer() {
       setIsAnalyzing(true);
       setError('');
       
-      // Crear FormData y añadir el archivo
       const formData = new FormData();
       formData.append('file', file);
       
@@ -40,13 +39,11 @@ export default function ATSOptimizer() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validar tipo de archivo
     if (file.type !== 'application/pdf') {
       setError('Por favor, sube un archivo PDF.');
       return;
     }
 
-    // Validar tamaño (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('El archivo es demasiado grande. Máximo 10MB.');
       return;
