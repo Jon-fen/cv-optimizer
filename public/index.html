@@ -5,44 +5,351 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Optimizador de CV para ATS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .bg-pattern {
+            background-color: #f8fafc;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239fa6b2' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .score-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .impact-percentage {
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        .category-critical {
+            color: #dc2626;
+            font-weight: 600;
+        }
+
+        .category-important {
+            color: #d97706;
+            font-weight: 600;
+        }
+
+        .category-minor {
+            color: #059669;
+            font-weight: 600;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+
+        .loading-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-pattern min-h-screen">
     <div class="max-w-4xl mx-auto p-6">
         <div class="text-center my-8">
-            <h1 class="text-3xl font-bold text-gray-900">Optimizador de CV para ATS</h1>
-            <p class="mt-3 text-lg text-gray-500">
-                Sube tu CV en PDF y obtén recomendaciones para mejorar su compatibilidad con sistemas ATS
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">Optimizador de CV para ATS</h1>
+            <p class="text-lg text-gray-600">
+                Sube tu CV en PDF y obtén un análisis detallado de compatibilidad con sistemas ATS
             </p>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm p-6">
-            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <input type="file" 
-                       accept=".pdf" 
-                       id="cvFile"
-                       class="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
-                              file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 
-                              hover:file:bg-blue-100 cursor-pointer">
-                <p class="mt-2 text-sm text-gray-500">PDF hasta 5MB</p>
+        <div class="bg-white rounded-xl shadow-lg p-8">
+            <!-- Selector de idioma -->
+            <div class="mb-6">
+                <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                    Idioma del análisis:
+                </label>
+                <select id="language" 
+                        class="w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg">
+                    <option value="es">Español</option>
+                    <option value="en">English</option>
+                </select>
             </div>
 
-            <div id="loading" class="hidden mt-6 text-center">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                <p class="mt-2 text-blue-600">Analizando CV...</p>
+            <div class="mt-6">
+                <label for="cvFile" class="block text-sm font-medium text-gray-700">
+                    Sube tu CV
+                </label>
+                <label for="cvFile" class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 cursor-pointer transition-colors duration-150">
+                    <div class="space-y-1 text-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="flex text-sm text-gray-600 justify-center">
+                            <span class="relative bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                Sube un archivo
+                            </span>
+                            <p class="pl-1">o arrastra y suelta</p>
+                            <input id="cvFile" name="cvFile" type="file" class="sr-only" accept=".pdf">
+                        </div>
+                        <p class="text-xs text-gray-500">PDF hasta 5MB</p>
+                    </div>
+                </label>
+                <div id="selectedFile" class="mt-2 text-sm text-gray-600 hidden">
+                    Archivo seleccionado: <span id="fileName"></span>
+                </div>
             </div>
 
-            <div id="error" class="hidden mt-6 bg-red-50 text-red-600 p-4 rounded-lg"></div>
+            <!-- Botón de Análisis -->
+            <div class="mt-4">
+                <button id="analyzeButton" 
+                        onclick="analyzeCV()" 
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                    Analizar mi CV
+                </button>
+            </div>
 
-            <div id="result" class="hidden mt-6 bg-green-50 p-6 rounded-lg">
-                <h2 class="text-xl font-semibold text-gray-900 mb-4">Análisis del CV</h2>
-                <pre id="analysis" class="whitespace-pre-wrap text-sm text-gray-700"></pre>
+            <!-- Sistemas ATS -->
+            <div>
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Sistemas ATS a analizar:</h3>
+                <p class="text-sm text-gray-500 mb-3">Selecciona los sistemas ATS específicos para los que quieres optimizar tu CV</p>
+                <div id="atsSystems" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <!-- Los sistemas ATS se agregarán aquí dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Descripción del trabajo (Premium) -->
+            <div class="relative">
+                <div class="absolute -top-2 right-0">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+                        Premium
+                    </span>
+                </div>
+                <label for="jobDescription" class="block text-sm font-medium text-gray-700 mb-2">
+                    Descripción del trabajo
+                </label>
+                <p class="text-sm text-gray-500 mb-3">Pega la descripción del trabajo para recibir sugerencias más específicas</p>
+                <textarea id="jobDescription"
+                          rows="4"
+                          class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          placeholder="Esta función estará disponible próximamente..."
+                          disabled></textarea>
+                <button onclick="unlockPremium()" 
+                        class="mt-2 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <svg class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Desbloquear función Premium
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p class="text-lg font-medium text-gray-900">Analizando CV...</p>
+                <p class="text-sm text-gray-500">Esto puede tomar unos segundos</p>
+            </div>
+        </div>
+
+        <div id="error" class="hidden mt-6 bg-red-50 text-red-600 p-4 rounded-xl"></div>
+
+        <div id="result" class="hidden mt-6">
+            <!-- Puntuación -->
+            <div class="score-card rounded-xl p-6 mb-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold text-gray-900">Puntuación del CV</h2>
+                    <div class="flex gap-8">
+                        <div class="text-center">
+                            <span class="text-sm text-gray-500">Actual</span>
+                            <div class="flex items-baseline">
+                                <span id="initialScore" class="text-3xl font-bold text-blue-600">-</span>
+                                <span class="text-lg text-blue-600">/100</span>
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <span class="text-sm text-gray-500">Proyectada</span>
+                            <div class="flex items-baseline">
+                                <span id="projectedScore" class="text-3xl font-bold text-green-600">-</span>
+                                <span class="text-lg text-green-600">/100</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de exportación -->
+            <div id="exportButtons" class="flex justify-end gap-4 mb-6 hidden">
+                <button onclick="exportToPDF()" 
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar PDF
+                </button>
+                <button onclick="exportToWord()" 
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar Word
+                </button>
+            </div>
+
+            <!-- Análisis Detallado -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Análisis Detallado</h2>
+                <div id="analysis" class="prose max-w-none">
+                    <!-- El análisis se insertará aquí -->
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        document.getElementById('cvFile').addEventListener('change', async (event) => {
-            const file = event.target.files[0];
+        // Variables globales
+        let selectedFile = null;
+        let premiumEnabled = false; // Para control de características premium
+
+        // Configurar marked para el formato del análisis
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
+        // Función para formatear el texto con colores y estilos
+        function formatAnalysisText(text) {
+            // Aplicar estilos personalizados a las categorías
+            text = text.replace(/\*\*Crítico:\*\*/g, '<span class="text-red-600 font-semibold">Crítico:</span>');
+            text = text.replace(/\*\*Importante:\*\*/g, '<span class="text-yellow-600 font-semibold">Importante:</span>');
+            text = text.replace(/\*\*Menor:\*\*/g, '<span class="text-blue-600 font-semibold">Menor:</span>');
+            
+            // Aplicar estilos a los porcentajes
+            text = text.replace(/(\d+)%/g, '<span class="text-green-600 font-semibold">$1%</span>');
+            
+            return marked.parse(text);
+        }
+
+        // Sistemas ATS predeterminados con descripciones
+        const defaultAtsSystems = [
+            { id: "workday", name: "Workday", description: "Popular en grandes empresas y corporaciones" },
+            { id: "greenhouse", name: "Greenhouse", description: "Común en startups y empresas tecnológicas" },
+            { id: "lever", name: "Lever", description: "Usado en empresas de tecnología y startups" },
+            { id: "icims", name: "iCIMS", description: "Utilizado en empresas medianas y grandes" },
+            { id: "jobvite", name: "Jobvite", description: "Popular en empresas de diversos tamaños" },
+            { id: "taleo", name: "Taleo", description: "Muy común en corporaciones Fortune 500" }
+        ];
+
+        // Función para crear los checkboxes de sistemas ATS
+        function createAtsCheckboxes() {
+            const container = document.getElementById('atsSystems');
+            defaultAtsSystems.forEach(system => {
+                const div = document.createElement('div');
+                div.className = 'relative flex items-start';
+                div.innerHTML = `
+                    <div class="flex items-center h-5">
+                        <input type="checkbox" 
+                               id="ats_${system.id}" 
+                               value="${system.name}"
+                               onchange="updateAnalyzeButton()"
+                               class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="ats_${system.id}" class="font-medium text-gray-700">${system.name}</label>
+                        <p class="text-gray-500">${system.description}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Función para actualizar el estado del botón de análisis
+        function updateAnalyzeButton() {
+            const selectedAtsSystems = Array.from(document.querySelectorAll('#atsSystems input:checked'));
+            const analyzeButton = document.getElementById('analyzeButton');
+            analyzeButton.disabled = !selectedFile || selectedAtsSystems.length === 0;
+        }
+
+        // Función para desbloquear características premium
+        function unlockPremium() {
+            premiumEnabled = true;
+            const jobDescription = document.getElementById('jobDescription');
+            jobDescription.disabled = false;
+            jobDescription.placeholder = "Pega aquí la descripción del trabajo al que estás aplicando...";
+            alert('¡Características Premium desbloqueadas! Ahora puedes usar la descripción del trabajo.');
+        }
+
+        // Manejador de archivo y zona de arrastre
+        const dropZone = document.querySelector('label[for="cvFile"]');
+        const fileInput = document.getElementById('cvFile');
+
+        // Prevenir comportamiento por defecto del navegador
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Resaltar la zona al arrastrar
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        }
+
+        function preventDefaults (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Manejar archivo soltado
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            handleFile(file);
+        }
+
+        // Manejar archivo seleccionado
+        fileInput.addEventListener('change', function(e) {
+            handleFile(this.files[0]);
+        });
+
+        // Función común para manejar el archivo
+        function handleFile(file) {
             if (!file) return;
 
             if (file.size > 5 * 1024 * 1024) {
@@ -50,17 +357,60 @@
                 return;
             }
 
+            if (file.type !== 'application/pdf') {
+                showError('Por favor, selecciona un archivo PDF');
+                return;
+            }
+
+            selectedFile = file;
+            const fileNameDisplay = document.getElementById('fileName');
+            const selectedFileDiv = document.getElementById('selectedFile');
+            fileNameDisplay.textContent = file.name;
+            selectedFileDiv.classList.remove('hidden');
+            
+            updateAnalyzeButton();
+        }
+
+        // Función para analizar el CV
+        async function analyzeCV() {
+            if (!selectedFile) {
+                showError('Por favor, selecciona un archivo PDF');
+                return;
+            }
+
+            const selectedAtsSystems = Array.from(document.querySelectorAll('#atsSystems input:checked'))
+                .map(checkbox => checkbox.value);
+
+            if (selectedAtsSystems.length === 0) {
+                showError('Por favor, selecciona al menos un sistema ATS');
+                return;
+            }
+
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
             const result = document.getElementById('result');
             const analysis = document.getElementById('analysis');
+            const initialScore = document.getElementById('initialScore');
+            const projectedScore = document.getElementById('projectedScore');
+            const exportButtons = document.getElementById('exportButtons');
+            const language = document.getElementById('language').value;
 
             loading.classList.remove('hidden');
             error.classList.add('hidden');
             result.classList.add('hidden');
+            exportButtons.classList.add('hidden');
 
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', selectedFile);
+            formData.append('language', language);
+            formData.append('atsSystems', JSON.stringify(selectedAtsSystems));
+
+            if (premiumEnabled) {
+                const jobDescription = document.getElementById('jobDescription').value;
+                if (jobDescription) {
+                    formData.append('jobDescription', jobDescription);
+                }
+            }
 
             try {
                 const response = await fetch('/analyze', {
@@ -68,26 +418,100 @@
                     body: formData
                 });
 
-                const data = await response.json();
-
                 if (!response.ok) {
-                    throw new Error(data.error || 'Error al procesar el archivo');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al analizar el CV');
                 }
 
-                analysis.textContent = data.analysis;
+                const data = await response.json();
+                
+                if (!data.analysis || !data.analysis.report) {
+                    throw new Error('No se recibió un análisis válido');
+                }
+
+                analysis.innerHTML = formatAnalysisText(data.analysis.report);
+                initialScore.textContent = Math.round(data.analysis.initialScore);
+                projectedScore.textContent = Math.round(data.analysis.projectedScore);
+
+                loading.classList.add('hidden');
                 result.classList.remove('hidden');
-            } catch (err) {
-                showError(err.message);
-            } finally {
+                exportButtons.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message || 'Error al procesar el archivo');
                 loading.classList.add('hidden');
             }
-        });
+        }
 
+        // Funciones de exportación
+        async function exportToPDF() {
+            try {
+                const response = await fetch('/export-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        analysis: document.getElementById('analysis').innerHTML,
+                        scores: {
+                            initial: document.getElementById('initialScore').textContent,
+                            projected: document.getElementById('projectedScore').textContent
+                        },
+                        fileName: `Analizado con Analyze this! - ${selectedFile.name.replace('.pdf', '')}`
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al exportar a PDF');
+                }
+
+                const blob = await response.blob();
+                saveAs(blob, `Analizado con Analyze this! - ${selectedFile.name}`);
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Error al exportar a PDF');
+            }
+        }
+
+        async function exportToWord() {
+            try {
+                const response = await fetch('/export-word', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        analysis: document.getElementById('analysis').innerHTML,
+                        scores: {
+                            initial: document.getElementById('initialScore').textContent,
+                            projected: document.getElementById('projectedScore').textContent
+                        },
+                        fileName: `Analizado con Analyze this! - ${selectedFile.name.replace('.pdf', '')}`
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al exportar a Word');
+                }
+
+                const blob = await response.blob();
+                saveAs(blob, `Analizado con Analyze this! - ${selectedFile.name.replace('.pdf', '.docx')}`);
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Error al exportar a Word');
+            }
+        }
+
+        // Función para mostrar errores
         function showError(message) {
             const error = document.getElementById('error');
             error.textContent = message;
             error.classList.remove('hidden');
+            document.getElementById('loading').classList.add('hidden');
         }
+
+        // Crear checkboxes al cargar la página
+        createAtsCheckboxes();
     </script>
 </body>
 </html>
