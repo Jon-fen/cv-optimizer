@@ -11,6 +11,11 @@ const path = require('path');
 const cors = require('cors');
 require('dotenv').config({ path: '.env.local' });
 
+console.log('Iniciando servidor...');
+console.log('Variables de entorno disponibles:', Object.keys(process.env));
+console.log('¿ANTHROPIC_API_KEY está definida?:', !!process.env.ANTHROPIC_API_KEY);
+console.log('Longitud de ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0);
+
 const app = express();
 
 // Configuración de middleware
@@ -183,6 +188,9 @@ const anthropic = new Anthropic({
 // Ruta para analizar CV
 app.post('/analyze', upload.single('file'), async (req, res) => {
   try {
+    console.log('Nueva solicitud de análisis recibida');
+    console.log('API Key disponible:', !!process.env.ANTHROPIC_API_KEY);
+
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('API key no configurada. Por favor, contacta al administrador.');
     }

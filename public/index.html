@@ -407,73 +407,68 @@
 
         // Función para analizar el CV
         async function analyzeCV() {
-            if (!selectedFile) {
-                showError('Por favor, selecciona un archivo PDF');
-                return;
-            }
+            try {
+                console.log('Iniciando análisis de CV...');
+                const fileInput = document.getElementById('cvFile');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    showError('Por favor, selecciona un archivo PDF');
+                    return;
+                }
 
-            const selectedAtsSystems = Array.from(document.querySelectorAll('#atsSystems input:checked'))
-                .map(checkbox => checkbox.value);
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Obtener sistemas ATS seleccionados
+                const selectedSystems = Array.from(document.querySelectorAll('input[name="ats"]:checked'))
+                    .map(checkbox => checkbox.value);
+                
+                if (selectedSystems.length === 0) {
+                    showError('Por favor, selecciona al menos un sistema ATS');
+                    return;
+                }
 
-            if (selectedAtsSystems.length === 0) {
-                showError('Por favor, selecciona al menos un sistema ATS');
-                return;
-            }
-
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const result = document.getElementById('result');
-            const analysis = document.getElementById('analysis');
-            const initialScore = document.getElementById('initialScore');
-            const projectedScore = document.getElementById('projectedScore');
-            const exportButtons = document.getElementById('exportButtons');
-            const language = document.getElementById('language').value;
-
-            loading.classList.remove('hidden');
-            error.classList.add('hidden');
-            result.classList.add('hidden');
-            exportButtons.classList.add('hidden');
-
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            formData.append('language', language);
-            formData.append('atsSystems', JSON.stringify(selectedAtsSystems));
-
-            if (premiumEnabled) {
+                formData.append('atsSystems', JSON.stringify(selectedSystems));
+                
+                // Agregar descripción del trabajo si está disponible
                 const jobDescription = document.getElementById('jobDescription').value;
                 if (jobDescription) {
                     formData.append('jobDescription', jobDescription);
                 }
-            }
 
-            try {
-                const response = await fetch('/analyze', {
+                showLoading(true);
+                console.log('Enviando solicitud al servidor...');
+
+                // Usar la URL base correcta según el entorno
+                const baseUrl = window.location.origin;
+                const response = await fetch(`${baseUrl}/analyze`, {
                     method: 'POST',
                     body: formData
                 });
 
+                console.log('Respuesta recibida:', response.status);
+                
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.error || 'Error al analizar el CV');
+                    throw new Error(errorData.error || 'Error en el servidor');
                 }
 
                 const data = await response.json();
-                
-                if (!data.analysis || !data.analysis.report) {
-                    throw new Error('No se recibió un análisis válido');
-                }
+                console.log('Datos recibidos:', data);
 
+                const analysis = document.getElementById('analysis');
                 analysis.innerHTML = formatAnalysisText(data.analysis.report);
-                initialScore.textContent = Math.round(data.analysis.initialScore);
-                projectedScore.textContent = Math.round(data.analysis.projectedScore);
+                document.getElementById('initialScore').textContent = Math.round(data.analysis.initialScore);
+                document.getElementById('projectedScore').textContent = Math.round(data.analysis.projectedScore);
 
-                loading.classList.add('hidden');
-                result.classList.remove('hidden');
-                exportButtons.classList.remove('hidden');
+                showLoading(false);
+                document.getElementById('result').classList.remove('hidden');
+                document.getElementById('exportButtons').classList.remove('hidden');
             } catch (error) {
                 console.error('Error:', error);
                 showError(error.message || 'Error al procesar el archivo');
-                loading.classList.add('hidden');
+                showLoading(false);
             }
         }
 
@@ -542,6 +537,16 @@
             error.textContent = message;
             error.classList.remove('hidden');
             document.getElementById('loading').classList.add('hidden');
+        }
+
+        // Función para mostrar la pantalla de carga
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.remove('hidden');
+            } else {
+                loading.classList.add('hidden');
+            }
         }
 
         // Crear checkboxes al cargar la página
