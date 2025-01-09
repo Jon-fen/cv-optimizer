@@ -18,6 +18,16 @@ console.log(' Configuración:', {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'Configurada' : 'No configurada'
 });
 
+// Función para sanitizar la API key
+function sanitizeApiKey(key) {
+    if (!key || typeof key !== 'string') return null;
+    // Remover espacios y caracteres no válidos
+    key = key.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    // Verificar formato correcto
+    if (!key.startsWith('sk-ant')) return null;
+    return key;
+}
+
 const app = express();
 
 // Configuración de middleware
@@ -194,9 +204,9 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
     console.log('\n Nueva solicitud de análisis recibida');
     
     try {
-        // Verificar API key
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (!apiKey || typeof apiKey !== 'string' || !apiKey.startsWith('sk-ant')) {
+        // Verificar y sanitizar API key
+        const apiKey = sanitizeApiKey(process.env.ANTHROPIC_API_KEY);
+        if (!apiKey) {
             console.error(' API key no válida');
             return res.status(500).json({
                 error: 'Error de configuración - API key no válida'
@@ -205,10 +215,15 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
 
         console.log(' API key verificada');
 
-        // Crear cliente Anthropic
+        // Crear cliente Anthropic con configuración específica
         console.log(' Creando cliente Anthropic...');
         const anthropic = new Anthropic({
-            apiKey: apiKey.trim()
+            apiKey,
+            defaultHeaders: {
+                'Content-Type': 'application/json',
+                'X-Api-Key': apiKey,
+                'anthropic-version': '2023-06-01'
+            }
         });
         console.log(' Cliente Anthropic creado');
 
@@ -244,24 +259,58 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
 
         // Preparar análisis
         console.log(' Preparando prompt para análisis...');
-        const prompt = `Por favor, analiza el siguiente CV para los sistemas ATS: ${atsSystems.join(", ")}.
+        const prompt = `Por favor, analiza el siguiente CV para optimizarlo para los sistemas ATS: ${atsSystems.join(", ")}.
 
 <CV>
 ${data.text}
 </CV>
 
-Por favor, estructura tu respuesta en el siguiente formato:
+Por favor, estructura tu respuesta en el siguiente formato detallado:
 
 <initial_score>
-[Puntuación inicial de 0-100]
+[Puntuación inicial numérica de 0-100]
 </initial_score>
 
 <analysis_report>
-[Tu análisis detallado aquí]
+# Resumen Ejecutivo
+[Breve resumen del CV y su compatibilidad actual con ATS]
+
+# Análisis Detallado
+
+## Fortalezas (✓)
+- [Lista de puntos fuertes]
+
+## Áreas de Mejora (!)
+- [Lista de áreas que necesitan mejora]
+
+## Palabras Clave
+- Detectadas: [Lista de palabras clave importantes encontradas]
+- Faltantes: [Lista de palabras clave sugeridas para agregar]
+
+## Formato y Estructura
+- [Análisis del formato actual]
+- [Problemas específicos de formato]
+- [Recomendaciones de estructura]
+
+## Recomendaciones Específicas por Sistema ATS
+${atsSystems.map(ats => `
+### ${ats}
+- [Recomendaciones específicas para este ATS]
+- [Problemas específicos detectados]
+- [Mejoras sugeridas]`).join('\n')}
+
+## Plan de Acción
+1. [Paso 1 con explicación]
+2. [Paso 2 con explicación]
+3. [Paso 3 con explicación]
+
+## Impacto Estimado
+- [Explicación de cómo estas mejoras aumentarán la puntuación]
+- [Áreas específicas donde se verá el mayor impacto]
 </analysis_report>
 
 <projected_score>
-[Puntuación proyectada después de implementar las mejoras, de 0-100]
+[Puntuación proyectada numérica de 0-100 después de implementar las mejoras]
 </projected_score>`;
 
         console.log(' Enviando a Anthropic...');
@@ -274,7 +323,7 @@ Por favor, estructura tu respuesta en el siguiente formato:
                 role: "user",
                 content: prompt
             }],
-            system: "Eres un experto en análisis de CVs y sistemas ATS."
+            system: "Eres un experto en análisis de CVs y sistemas ATS (Applicant Tracking Systems). Tu objetivo es proporcionar un análisis detallado y práctico que ayude a mejorar significativamente la compatibilidad del CV con los sistemas ATS. Debes ser específico, detallado y proporcionar ejemplos concretos cuando sea posible. Usa formato Markdown para estructurar tu respuesta."
         });
 
         console.log(' Respuesta recibida de Anthropic');
