@@ -11,10 +11,13 @@ const path = require('path');
 const cors = require('cors');
 require('dotenv').config({ path: '.env.local' });
 
-console.log('Iniciando servidor...');
-console.log('Variables de entorno disponibles:', Object.keys(process.env));
-console.log('¿ANTHROPIC_API_KEY está definida?:', !!process.env.ANTHROPIC_API_KEY);
-console.log('Longitud de ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0);
+console.log(' Iniciando servidor...');
+console.log(' Versión de @anthropic-ai/sdk:', require('@anthropic-ai/sdk/package.json').version);
+console.log(' Variables de entorno:', {
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    ANTHROPIC_KEY_LENGTH: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0
+});
 
 const app = express();
 
@@ -23,18 +26,19 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Middleware para logging de solicitudes
+// Middleware para logging
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
+    console.log(` ${req.method} ${req.path}`);
+    console.log(' Headers:', JSON.stringify(req.headers, null, 2));
+    next();
 });
 
 // Servir archivos estáticos solo si no estamos en Vercel
 if (process.env.VERCEL !== '1') {
-  app.use(express.static('public'));
+    app.use(express.static('public'));
 }
 
-const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
+const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Lista de sistemas ATS comunes
 const DEFAULT_ATS_SYSTEMS = [
@@ -188,78 +192,60 @@ Please provide your analysis in this format:
 
 // Ruta para analizar CV
 app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'), async (req, res) => {
-    console.log('📝 Nueva solicitud de análisis recibida');
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    console.log('File:', req.file);
+    console.log('\n Nueva solicitud de análisis recibida');
     
     try {
         // Verificar API key
         if (!process.env.ANTHROPIC_API_KEY) {
-            console.error('❌ API key no configurada');
-            return res.status(500).json({
-                error: 'Servicio no disponible - Error de configuración'
-            });
+            throw new Error('API key no configurada');
         }
 
+        console.log(' API key verificada');
+
         // Crear cliente Anthropic
-        const anthropicClient = new Anthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY
+        console.log(' Creando cliente Anthropic...');
+        const anthropic = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY,
+            baseURL: 'https://api.anthropic.com'
         });
+        console.log(' Cliente Anthropic creado');
 
         // Verificar archivo
         if (!req.file) {
-            console.error('❌ No se recibió archivo');
-            return res.status(400).json({
-                error: 'No se ha subido ningún archivo'
-            });
+            throw new Error('No se ha subido ningún archivo');
         }
 
         const file = req.file;
-        console.log('📄 Archivo recibido:', file.originalname);
+        console.log(' Archivo recibido:', {
+            nombre: file.originalname,
+            tipo: file.mimetype,
+            tamaño: file.size
+        });
 
         // Procesar PDF
-        console.log('🔍 Procesando PDF...');
+        console.log(' Procesando PDF...');
         const data = await pdfParse(file.buffer);
-        const text = data.text;
+        console.log(' PDF procesado, longitud del texto:', data.text.length);
 
-        if (!text || text.trim().length === 0) {
+        if (!data.text || data.text.trim().length === 0) {
             throw new Error('No se pudo extraer texto del PDF');
         }
 
         // Obtener sistemas ATS
-        const atsSystemsStr = req.body.atsSystems;
-        let atsSystems;
-        try {
-            atsSystems = JSON.parse(atsSystemsStr);
-            if (!Array.isArray(atsSystems) || atsSystems.length === 0) {
-                throw new Error('Formato inválido de sistemas ATS');
-            }
-        } catch (e) {
-            throw new Error('Error al procesar sistemas ATS: ' + e.message);
+        console.log(' Procesando sistemas ATS...');
+        const atsSystems = JSON.parse(req.body.atsSystems || '[]');
+        console.log(' Sistemas ATS seleccionados:', atsSystems);
+
+        if (!Array.isArray(atsSystems) || atsSystems.length === 0) {
+            throw new Error('Sistemas ATS no válidos');
         }
 
-        // Preparar prompt
-        console.log('🤖 Preparando análisis...');
-        const jobDescription = req.body.jobDescription || '';
-        
-        // Llamar a la API de Anthropic
-        console.log('🚀 Enviando a Anthropic...');
-        const response = await anthropicClient.messages.create({
-            model: "claude-3-haiku-20240307",
-            max_tokens: 4096,
-            messages: [{
-                role: "user",
-                content: `Por favor, analiza el siguiente CV para los sistemas ATS: ${atsSystems.join(", ")}.
-
-${jobDescription ? `
-<JOB_DESCRIPTION>
-${jobDescription}
-</JOB_DESCRIPTION>
-` : ''}
+        // Preparar análisis
+        console.log(' Preparando prompt para análisis...');
+        const prompt = `Por favor, analiza el siguiente CV para los sistemas ATS: ${atsSystems.join(", ")}.
 
 <CV>
-${text}
+${data.text}
 </CV>
 
 Por favor, estructura tu respuesta en el siguiente formato:
@@ -274,19 +260,34 @@ Por favor, estructura tu respuesta en el siguiente formato:
 
 <projected_score>
 [Puntuación proyectada después de implementar las mejoras, de 0-100]
-</projected_score>`
+</projected_score>`;
+
+        console.log(' Enviando a Anthropic...');
+        console.log(' Longitud del prompt:', prompt.length);
+
+        const response = await anthropic.messages.create({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 4096,
+            messages: [{
+                role: "user",
+                content: prompt
             }],
-            system: "Eres un experto en análisis de CVs y sistemas ATS (Applicant Tracking Systems). Tu tarea es analizar CVs y proporcionar retroalimentación detallada para mejorar su compatibilidad con sistemas ATS."
+            system: "Eres un experto en análisis de CVs y sistemas ATS."
         });
 
-        if (!response || !response.content || !response.content[0]) {
-            throw new Error('No se recibió respuesta del análisis');
+        console.log(' Respuesta recibida de Anthropic');
+        console.log(' Estructura de la respuesta:', {
+            tieneContenido: !!response?.content,
+            longitudContenido: response?.content?.[0]?.text?.length || 0
+        });
+
+        if (!response?.content?.[0]?.text) {
+            throw new Error('Respuesta inválida de Anthropic');
         }
 
-        // Procesar respuesta
-        console.log('✅ Análisis completado');
         const content = response.content[0].text;
-        
+        console.log(' Procesando respuesta...');
+
         // Extraer secciones
         const analysisMatch = content.match(/<analysis_report>([\s\S]*?)<\/analysis_report>/m);
         const initialMatch = content.match(/<initial_score>([\s\S]*?)<\/initial_score>/m);
@@ -303,13 +304,19 @@ Por favor, estructura tu respuesta en el siguiente formato:
             atsSystems: atsSystems
         };
 
+        console.log(' Análisis completado con éxito');
         return res.json({ analysis });
 
     } catch (error) {
-        console.error('❌ Error:', error);
+        console.error(' Error:', error);
+        console.error('Stack:', error.stack);
+        
         return res.status(500).json({ 
             error: 'Error al procesar el archivo',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            details: process.env.NODE_ENV === 'development' ? {
+                message: error.message,
+                stack: error.stack
+            } : undefined
         });
     }
 });
@@ -465,7 +472,7 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
 
 // Manejador de errores global
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
+  console.error(' Error:', err);
   
   // Si ya se envió una respuesta, no hacer nada
   if (res.headersSent) {
