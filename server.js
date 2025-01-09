@@ -56,7 +56,10 @@ const DEFAULT_ATS_SYSTEMS = [
   "Lever",
   "iCIMS",
   "Jobvite",
-  "Taleo"
+  "Taleo",
+  "LinkedIn",
+  "Trabajando.com",
+  "Laborum.com"
 ].join(", ");
 
 // Prompts en diferentes idiomas
@@ -199,6 +202,54 @@ Please provide your analysis in this format:
   }
 };
 
+// Ruta para servir el archivo CSS
+app.get('/styles.css', (req, res) => {
+    res.type('text/css').send(`
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background-color: #fafafa;
+            background-image: 
+                radial-gradient(#e2e8f0 2px, transparent 2px),
+                radial-gradient(#e2e8f0 2px, transparent 2px);
+            background-size: 32px 32px;
+            background-position: 0 0, 16px 16px;
+        }
+    `);
+});
+
+// Función para generar el prompt
+function generatePrompt(text, selectedSystems) {
+    const defaultSystems = ['LinkedIn', 'Trabajando.com', 'Laborum.com'];
+    const allSystems = [...new Set([...selectedSystems, ...defaultSystems])];
+    
+    return `Analiza este CV para compatibilidad con sistemas ATS (${allSystems.join(', ')}). 
+
+CV:
+${text}
+
+Instrucciones:
+1. Analiza la compatibilidad con los sistemas ATS mencionados
+2. Evalúa estructura, palabras clave, formato y contenido
+3. Asigna una puntuación inicial (0-100)
+4. Proporciona recomendaciones específicas y accionables
+5. Calcula una puntuación proyectada después de aplicar las mejoras
+
+Formato de respuesta:
+<analysis_report>
+[Tu análisis detallado aquí, usando para aspectos positivos, para mejoras sugeridas, y para problemas críticos]
+</analysis_report>
+
+<initial_score>
+[Puntuación inicial]
+</initial_score>
+
+<projected_score>
+[Puntuación proyectada]
+</projected_score>`;
+}
+
 // Ruta para analizar CV
 app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'), async (req, res) => {
     console.log('\n Nueva solicitud de análisis recibida');
@@ -259,63 +310,10 @@ app.post(['/analyze', '/api/analyze', '/api/analyze-cv'], upload.single('file'),
 
         // Preparar análisis
         console.log(' Preparando prompt para análisis...');
-        const prompt = `Por favor, analiza el siguiente CV para optimizarlo para los sistemas ATS: ${atsSystems.join(", ")}.
-
-<CV>
-${data.text}
-</CV>
-
-Por favor, estructura tu respuesta en el siguiente formato detallado:
-
-<initial_score>
-[Puntuación inicial numérica de 0-100]
-</initial_score>
-
-<analysis_report>
-# Resumen Ejecutivo
-[Breve resumen del CV y su compatibilidad actual con ATS]
-
-# Análisis Detallado
-
-## Fortalezas (✓)
-- [Lista de puntos fuertes]
-
-## Áreas de Mejora (!)
-- [Lista de áreas que necesitan mejora]
-
-## Palabras Clave
-- Detectadas: [Lista de palabras clave importantes encontradas]
-- Faltantes: [Lista de palabras clave sugeridas para agregar]
-
-## Formato y Estructura
-- [Análisis del formato actual]
-- [Problemas específicos de formato]
-- [Recomendaciones de estructura]
-
-## Recomendaciones Específicas por Sistema ATS
-${atsSystems.map(ats => `
-### ${ats}
-- [Recomendaciones específicas para este ATS]
-- [Problemas específicos detectados]
-- [Mejoras sugeridas]`).join('\n')}
-
-## Plan de Acción
-1. [Paso 1 con explicación]
-2. [Paso 2 con explicación]
-3. [Paso 3 con explicación]
-
-## Impacto Estimado
-- [Explicación de cómo estas mejoras aumentarán la puntuación]
-- [Áreas específicas donde se verá el mayor impacto]
-</analysis_report>
-
-<projected_score>
-[Puntuación proyectada numérica de 0-100 después de implementar las mejoras]
-</projected_score>`;
-
-        console.log(' Enviando a Anthropic...');
+        const prompt = generatePrompt(data.text, atsSystems);
         console.log(' Longitud del prompt:', prompt.length);
 
+        console.log(' Enviando a Anthropic...');
         const response = await anthropic.messages.create({
             model: "claude-3-haiku-20240307",
             max_tokens: 4096,
