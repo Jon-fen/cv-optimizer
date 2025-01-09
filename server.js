@@ -60,6 +60,10 @@ const defaultSystems = [
     "LinkedIn",
     "Trabajando.com",
     "Laborum.com",
+    "SAP SuccessFactors",
+    "JazzHR",
+    "BambooHR",
+    "Recruitee",
     "GetOnBoard"
 ];
 
@@ -258,10 +262,21 @@ app.get('/styles.css', (req, res) => {
             color: #333;
             background-color: #f0f2f5;
             background-image: 
-                radial-gradient(#e2e8f0 2px, transparent 2px),
-                radial-gradient(#e2e8f0 2px, transparent 2px);
-            background-size: 32px 32px;
-            background-position: 0 0, 16px 16px;
+                radial-gradient(#e2e8f0 1.5px, transparent 1.5px),
+                radial-gradient(#e2e8f0 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+            position: relative;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            backdrop-filter: blur(1px);
+            z-index: -1;
         }
         .container {
             max-width: 800px;
@@ -270,7 +285,6 @@ app.get('/styles.css', (req, res) => {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 16px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-            backdrop-filter: blur(8px);
         }
         .header {
             text-align: center;
@@ -325,6 +339,10 @@ app.get('/styles.css', (req, res) => {
             background: #f1f5f9;
             transform: translateX(5px);
         }
+        .analysis-line strong {
+            font-weight: 600;
+            color: #1e40af;
+        }
         .positive {
             color: #16a34a;
             border-left: 4px solid #16a34a;
@@ -340,45 +358,23 @@ app.get('/styles.css', (req, res) => {
             border-left: 4px solid #dc2626;
             background: linear-gradient(to right, #fee2e2 0%, #f8fafc 100%);
         }
-        .keywords {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 20px 0;
-        }
-        .keyword {
-            padding: 4px 12px;
-            border-radius: 16px;
-            font-size: 14px;
-            background: #e0e7ff;
-            color: #4f46e5;
-            transition: all 0.2s;
-        }
-        .keyword:hover {
-            background: #4f46e5;
-            color: white;
-            transform: scale(1.05);
-        }
-        .keyword-match {
-            background: #bbf7d0;
-            color: #16a34a;
-        }
-        .keyword-missing {
-            background: #fee2e2;
-            color: #dc2626;
-        }
     `);
 });
 
-// Función para formatear el análisis
+// Función para formatear el análisis con negritas
 function formatAnalysis(text) {
     return text
         .split('\n')
         .map(line => {
+            // Agregar negritas a las secciones principales
+            line = line.replace(/(^[^:]+:)/, '<strong>$1</strong>');
+            
             let className = '';
             if (line.includes('✅')) className = 'positive';
             if (line.includes('⚠️')) className = 'warning';
             if (line.includes('❌')) className = 'critical';
+            
+            // Agregar saltos de línea HTML
             return `<div class="analysis-line ${className}">${line}</div>`;
         })
         .join('\n');
@@ -400,10 +396,13 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         line-height: 1.8;
                         color: #333;
                         padding: 40px;
+                        background-color: #f8fafc;
                     }
                     .container {
-                        max-width: 800px;
-                        margin: 0 auto;
+                        background: white;
+                        padding: 40px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }
                     .header {
                         text-align: center;
@@ -428,7 +427,6 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         font-size: 32px;
                         font-weight: bold;
                         color: #4f46e5;
-                        text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
                     }
                     .score-label {
                         font-size: 14px;
@@ -443,16 +441,32 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
                         border-radius: 8px;
                         background: #f8fafc;
                     }
-                    .positive { color: #16a34a; border-left: 4px solid #16a34a; }
-                    .warning { color: #ca8a04; border-left: 4px solid #ca8a04; }
-                    .critical { color: #dc2626; border-left: 4px solid #dc2626; }
+                    .positive { 
+                        color: #16a34a; 
+                        border-left: 4px solid #16a34a;
+                        background: #dcfce7;
+                    }
+                    .warning { 
+                        color: #ca8a04; 
+                        border-left: 4px solid #ca8a04;
+                        background: #fef9c3;
+                    }
+                    .critical { 
+                        color: #dc2626; 
+                        border-left: 4px solid #dc2626;
+                        background: #fee2e2;
+                    }
+                    strong {
+                        font-weight: 600;
+                        color: #1e40af;
+                    }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <div class="header">
                         <h1>Análisis de CV</h1>
-                        <p>Generado por Analyze This!</p>
+                        <p>Generado por CV Optimizer</p>
                     </div>
                     
                     <div class="scores">
@@ -474,15 +488,18 @@ app.post(['/export-pdf', '/api/export-pdf'], express.json(), async (req, res) =>
             </html>
         `;
 
-        pdf.create(htmlContent, {
+        const options = {
             format: 'A4',
             border: {
                 top: "20mm",
                 right: "20mm",
                 bottom: "20mm",
                 left: "20mm"
-            }
-        }).toBuffer((err, buffer) => {
+            },
+            timeout: 120000
+        };
+
+        pdf.create(htmlContent, options).toBuffer((err, buffer) => {
             if (err) {
                 console.error('Error al generar PDF:', err);
                 res.status(500).json({ error: 'Error al generar PDF' });
@@ -516,7 +533,7 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
                     }),
                     
                     new docx.Paragraph({
-                        text: "Generado por Analyze This!",
+                        text: "Generado por CV Optimizer",
                         alignment: docx.AlignmentType.CENTER,
                         spacing: { before: 100, after: 400 }
                     }),
@@ -565,6 +582,25 @@ app.post(['/export-word', '/api/export-word'], express.json(), async (req, res) 
                         if (line.includes('✅')) color = '228B22'; // Verde oscuro
                         if (line.includes('⚠️')) color = 'FFA500'; // Naranja
                         if (line.includes('❌')) color = 'DC143C'; // Rojo
+
+                        // Hacer el título en negrita
+                        const parts = line.split(':');
+                        if (parts.length > 1) {
+                            return new docx.Paragraph({
+                                children: [
+                                    new docx.TextRun({
+                                        text: parts[0] + ':',
+                                        bold: true,
+                                        color: color
+                                    }),
+                                    new docx.TextRun({
+                                        text: parts.slice(1).join(':'),
+                                        color: color
+                                    })
+                                ],
+                                spacing: { before: 120, after: 120 }
+                            });
+                        }
 
                         return new docx.Paragraph({
                             children: [
